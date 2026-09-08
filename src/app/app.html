@@ -1,0 +1,70 @@
+@if (mostrarShell()) {
+  <mat-sidenav-container class="contenedor">
+    <mat-sidenav
+      [mode]="modoCajon()"
+      [opened]="cajonAbierto()"
+      (openedChange)="cajonAbierto.set($event)"
+      class="lateral"
+      role="navigation"
+    >
+      <div class="marca">
+        <mat-icon aria-hidden="true">dentistry</mat-icon>
+        <span>DentalCite</span>
+      </div>
+      <mat-nav-list>
+        @for (entrada of entradas(); track entrada.ruta) {
+          <a
+            mat-list-item
+            [routerLink]="entrada.ruta"
+            routerLinkActive
+            #enlace="routerLinkActive"
+            [activated]="enlace.isActive"
+          >
+            <mat-icon matListItemIcon aria-hidden="true">{{ entrada.icono }}</mat-icon>
+            <span matListItemTitle>{{ entrada.etiqueta }}</span>
+          </a>
+        }
+      </mat-nav-list>
+    </mat-sidenav>
+
+    <mat-sidenav-content>
+      <mat-toolbar color="primary" class="barra">
+        <button
+          mat-icon-button
+          type="button"
+          (click)="cajonAbierto.set(!cajonAbierto())"
+          [attr.aria-expanded]="cajonAbierto()"
+          aria-label="Mostrar u ocultar el menu de navegacion"
+        >
+          <mat-icon>menu</mat-icon>
+        </button>
+        <span class="marca-barra">DentalCite</span>
+        <span class="expansor"></span>
+        <span class="rol">{{ rol() }}</span>
+        <button mat-icon-button type="button" [matMenuTriggerFor]="menu" aria-label="Mi cuenta">
+          <mat-icon>account_circle</mat-icon>
+        </button>
+        <mat-menu #menu="matMenu">
+          <a mat-menu-item routerLink="/perfil">
+            <mat-icon>badge</mat-icon>
+            <span>Mi perfil</span>
+          </a>
+          <a mat-menu-item routerLink="/cambiar-password">
+            <mat-icon>key</mat-icon>
+            <span>Cambiar contraseña</span>
+          </a>
+          <button mat-menu-item type="button" (click)="cerrarSesion()">
+            <mat-icon>logout</mat-icon>
+            <span>Cerrar sesión</span>
+          </button>
+        </mat-menu>
+      </mat-toolbar>
+
+      <main class="contenido">
+        <router-outlet />
+      </main>
+    </mat-sidenav-content>
+  </mat-sidenav-container>
+} @else {
+  <router-outlet />
+}

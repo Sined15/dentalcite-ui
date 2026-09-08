@@ -1,0 +1,77 @@
+.contenedor {
+  // `100dvh` y no `100vh`: en un movil la barra del navegador se retrae al
+  // desplazar, y con `vh` el shell quedaba mas alto que la ventana visible.
+  height: 100dvh;
+}
+
+.lateral {
+  width: 15rem;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.barra {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  gap: 0.25rem;
+}
+
+.marca-barra {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  // Solo cuando el cajon esta superpuesto: si esta a la vista, su cabecera ya
+  // lleva la marca y repetirla es ruido.
+  display: none;
+}
+
+.expansor {
+  flex: 1 1 auto;
+}
+
+.rol {
+  font-size: 0.8125rem;
+  opacity: 0.85;
+  margin-right: 0.5rem;
+  white-space: nowrap;
+}
+
+.contenido {
+  display: block;
+  padding: 1.5rem;
+  // Contiene el desbordamiento lateral en la zona de contenido, para que una
+  // tabla ancha lo resuelva dentro de su `.tabla-scroll` en vez de empujar la
+  // barra pegajosa fuera de la ventana.
+  overflow-x: hidden;
+}
+
+// Cajon superpuesto: la marca pasa a la barra, que es lo unico visible.
+@media (max-width: 56.24rem) {
+  .marca-barra {
+    display: inline;
+  }
+  .contenido {
+    padding: 1rem;
+  }
+}
+
+// Moviles estrechos: el rol compite con los botones por el ancho y es
+// informativo, no accionable. El menu de cuenta lo sigue mostrando.
+@media (max-width: 26rem) {
+  .rol {
+    display: none;
+  }
+  .contenido {
+    padding: 0.75rem;
+  }
+  .marca-barra {
+    font-size: 1rem;
+  }
+}

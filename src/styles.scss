@@ -1,0 +1,111 @@
+// Include theming for Angular Material with `mat.theme()`.
+// This Sass mixin will define CSS variables that are used for styling Angular Material
+// components according to the Material 3 design spec.
+// Learn more about theming and how to use it for your application's
+// custom components at https://material.angular.dev/guide/theming
+@use '@angular/material' as mat;
+
+html {
+  height: 100%;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+}
+
+body {
+  // Default the application to a light color theme. This can be changed to
+  // `dark` to enable the dark color theme, or to `light dark` to defer to the
+  // user's system settings.
+  color-scheme: light;
+
+  // Set a default background, font and text colors for the application using
+  // Angular Material's system-level CSS variables. Learn more about these
+  // variables at https://material.angular.dev/guide/system-variables
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+
+  // Reset the user agent margin.
+  margin: 0;
+  height: 100%;
+}
+/* You can add global styles to this file, and also import other style files */
+
+// --- Base responsiva -------------------------------------------------------
+// El cliente tiene que servir desde un movil de 320px hasta un escritorio
+// ancho (RNF de usabilidad), asi que estas reglas valen para toda la app.
+
+*,
+*::before,
+*::after {
+  // Sin esto, un `width: 100%` mas padding desborda su contenedor, que es como
+  // aparecian las barras de desplazamiento horizontal en las tarjetas.
+  box-sizing: border-box;
+}
+
+html,
+body {
+  // Ultima red: ningun ancho fijo debe poder desplazar la pagina entera de
+  // lado. Las tablas anchas se desplazan dentro de su propio `.tabla-scroll`.
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+// Las tablas de Material llevan un ancho minimo para que sus columnas quepan;
+// el contenedor que las envuelve es el que desplaza, y en tactil conviene que
+// lo haga con inercia y sin quedarse a medias entre dos columnas.
+.tabla-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+// El contenedor recibe el foco para poder desplazarse con teclado (WCAG
+// 2.1.1), asi que ese foco tiene que verse (WCAG 2.4.7). `:focus-visible` y no
+// `:focus`: al pinchar con el raton el contorno seria ruido.
+.tabla-scroll:focus-visible {
+  outline: 2px solid var(--mat-sys-primary, #005cbb);
+  outline-offset: 2px;
+}
+
+// El paginador coloca en una sola linea el selector de tamano, el rango y las
+// flechas; en un movil esa linea no cabe y desbordaba su tarjeta.
+.mat-mdc-paginator-container {
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 0.25rem;
+}
+
+// La lupa de los campos de filtro es decorativa: no es un boton, y la etiqueta
+// («Filtrar por motivo, odontologo o consultorio») ya dice lo que hacen. En
+// pantallas muy estrechas se le queda encima al texto de la etiqueta, que
+// Material no acorta al ancho del sufijo, asi que se retira y la etiqueta
+// recupera su sitio. Solo afecta a `.filtro`: el sufijo del campo de
+// Contraseña si es accionable y se conserva.
+@media (max-width: 26rem) {
+  .filtro .mat-mdc-form-field-icon-suffix {
+    display: none;
+  }
+}
+
+// `subscriptSizing: dynamic` quita el hueco fijo que el campo reservaba debajo,
+// asi que una pista de dos lineas quedaba a 4px de la etiqueta del campo
+// siguiente. Se devuelve un margen propio, y solo cuando el subindice tiene
+// contenido: sin pista ni error el envoltorio queda vacio y no debe separar
+// nada.
+.mat-mdc-form-field-subscript-dynamic-size:has(.mat-mdc-form-field-hint-wrapper, .mat-mdc-form-field-error-wrapper) {
+  padding-bottom: 0.5rem;
+}
