@@ -46,6 +46,15 @@ const ODONTOLOGOS: Odontologo[] = [
   },
 ];
 
+/** "YYYY-MM-DD" de hoy mas `dias`, en hora local y sin pasar por UTC. */
+function fechaLocal(dias: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
 function cita(id: string, hora: string, estado: CitaResumen['estado'] = 'CONFIRMADA'): CitaResumen {
   return {
     id,
@@ -92,6 +101,7 @@ interface Interno {
   cargar: () => void;
   cambiarPagina: (evento: { pageIndex: number; pageSize: number }) => void;
   cancelar: (cita: CitaResumen) => void;
+  pendienteDeCierre: (cita: CitaResumen) => boolean;
   error: () => string | null;
   etiquetaEstado: (estado: CitaResumen['estado']) => string;
 }
@@ -313,5 +323,50 @@ describe('Agenda', () => {
 
     expect(componente.etiquetaEstado('NO_ASISTIO')).toBe('No asistió');
     expect(componente.etiquetaEstado('CONFIRMADA')).toBe('Confirmada');
+  });
+
+  // ------------------------------------------------------------------
+  // HU-16 · registrar el resultado desde la agenda
+  // ------------------------------------------------------------------
+
+  it('HU-16: una cita confirmada que ya termino esta pendiente de cierre', async () => {
+    httpMock.expectOne((r) => r.url === API).flush(pagina([]));
+    await fixture.whenStable();
+
+    const vencida = { ...cita('c-1', '09:00:00'), fecha: fechaLocal(-2) };
+    expect(componente.pendienteDeCierre(vencida)).toBe(true);
+  });
+
+  it('HU-16: una cita confirmada que aun no ha llegado, no', async () => {
+    // El servidor responde 409 a esa: ofrecer el boton seria mandar a pulsar
+    // algo que no puede funcionar.
+    httpMock.expectOne((r) => r.url === API).flush(pagina([]));
+    await fixture.whenStable();
+
+    const futura = { ...cita('c-1', '09:00:00'), fecha: fechaLocal(2) };
+    expect(componente.pendienteDeCierre(futura)).toBe(false);
+  });
+
+  it('HU-16: una cita que ya tiene desenlace tampoco', async () => {
+    httpMock.expectOne((r) => r.url === API).flush(pagina([]));
+    await fixture.whenStable();
+
+    const cancelada = { ...cita('c-1', '09:00:00', 'CANCELADA'), fecha: fechaLocal(-2) };
+    const atendida = { ...cita('c-2', '09:00:00', 'ATENDIDA'), fecha: fechaLocal(-2) };
+    expect(componente.pendienteDeCierre(cancelada)).toBe(false);
+    expect(componente.pendienteDeCierre(atendida)).toBe(false);
+  });
+
+  it('HU-16: solo pinta el boton de registrar en las filas pendientes de cierre', async () => {
+    const vencida = { ...cita('c-1', '09:00:00'), fecha: fechaLocal(-2) };
+    const futura = { ...cita('c-2', '10:00:00'), fecha: fechaLocal(2) };
+    httpMock.expectOne((r) => r.url === API).flush(pagina([vencida, futura]));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    const botones = raiz.querySelectorAll('button[aria-label^="Registrar el resultado"]');
+    expect(botones).toHaveLength(1);
+    expect(botones[0].getAttribute('aria-label')).toContain('CIT-000001');
   });
 });

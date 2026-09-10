@@ -68,6 +68,8 @@ const PANTALLAS = [
   // delante, que es un control mas —un combobox— y no se audita solo.
   ['RECEPCIONISTA', '/disponibilidad'],
   ['PACIENTE', '/mis-citas'],
+  ['ODONTOLOGO', '/citas/pendientes'],
+  ['RECEPCIONISTA', '/citas/pendientes'],
 ];
 
 /**

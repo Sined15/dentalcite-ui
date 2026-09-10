@@ -80,6 +80,12 @@ const MENU: readonly EntradaMenu[] = [
     roles: ['RECEPCIONISTA', 'ADMINISTRADOR'],
   },
   {
+    ruta: '/citas/pendientes',
+    etiqueta: 'Por cerrar',
+    icono: 'fact_check',
+    roles: ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'],
+  },
+  {
     ruta: '/mis-citas',
     etiqueta: 'Mis citas',
     icono: 'event_note',

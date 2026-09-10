@@ -109,6 +109,19 @@ export interface MisCitasQuery {
   estado?: EstadoCita | '';
 }
 
+/**
+ * Los dos desenlaces que RF-22 admite al cerrar una cita (HU-16). Son un
+ * subconjunto de `EstadoCita`: CONFIRMADA es de donde se sale y CANCELADA se
+ * alcanza por otra operacion, la de RF-20.
+ */
+export const RESULTADOS_CITA = ['ATENDIDA', 'NO_ASISTIO'] as const;
+export type ResultadoCita = (typeof RESULTADOS_CITA)[number];
+
+/** Cuerpo de `PATCH /api/v1/citas/{id}/resultado` (HU-16 · RF-22). */
+export interface ResultadoRequest {
+  resultado: ResultadoCita;
+}
+
 /** Cuerpo de `PATCH /api/v1/citas/{id}/cancelar`. El motivo es obligatorio (RF-20). */
 export interface CancelacionRequest {
   motivo: string;

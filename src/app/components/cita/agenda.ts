@@ -17,6 +17,7 @@ import { CitaService } from '../../services/cita.service';
 import { OdontologoService } from '../../services/odontologo.service';
 import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
 import { CancelarDialogo, CancelarDialogoDatos } from './cancelar-dialogo';
+import { ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
 import { HistorialDialogo, HistorialDialogoDatos } from './historial-dialogo';
 
 /** Hoy en formato "YYYY-MM-DD", sin pasar por UTC. */
@@ -169,6 +170,21 @@ function hoy(): string {
             >
               <mat-icon>history</mat-icon>
             </button>
+            <!--
+              HU-16: solo cuando la cita esta pendiente de cierre. El servidor
+              responde 409 a una que aun no ha terminado, asi que ofrecer el boton
+              antes seria mandar a pulsar algo que no puede funcionar.
+            -->
+            @if (pendienteDeCierre(fila)) {
+              <button
+                mat-icon-button
+                type="button"
+                (click)="registrarResultado(fila)"
+                [attr.aria-label]="'Registrar el resultado de ' + fila.codigo"
+              >
+                <mat-icon>fact_check</mat-icon>
+              </button>
+            }
             <button
               mat-icon-button
               type="button"
@@ -375,6 +391,34 @@ export class Agenda {
     this.dialogo.open(HistorialDialogo, { data: datos });
   }
 
+  /**
+   * HU-16: una cita esta pendiente de cierre cuando sigue CONFIRMADA y su hora
+   * de fin ya paso (RN-09). Se calcula aqui y no viene del servidor porque la
+   * agenda ya trae la fecha, la hora y la duracion, y el servidor tendria que
+   * fijar un «ahora» para toda la clinica en cada fila.
+   */
+  protected pendienteDeCierre(cita: CitaResumen): boolean {
+    if (cita.estado !== 'CONFIRMADA') {
+      return false;
+    }
+    return finLocal(cita) < Date.now();
+  }
+
+  protected registrarResultado(cita: CitaResumen): void {
+    const datos: ResultadoDialogoDatos = { cita };
+    this.dialogo
+      .open(ResultadoDialogo, { data: datos })
+      .afterClosed()
+      .subscribe((registrado) => {
+        if (!registrado) {
+          return;
+        }
+        this.snackBar.open(`Resultado de ${cita.codigo} registrado.`, 'Cerrar', { duration: 6000 });
+        // La fila cambio de estado y la agenda que hay delante ya no vale.
+        this.cargar();
+      });
+  }
+
   protected cancelar(cita: CitaResumen): void {
     // Recepcion atiende citas de terceros: de quien es tiene que verse.
     const datos: CancelarDialogoDatos = { cita, mostrarPaciente: true };
@@ -392,4 +436,15 @@ export class Agenda {
         this.cargar();
       });
   }
+}
+
+/**
+ * El instante en que termina la cita, en hora local. Se construye a partir de
+ * las cadenas sin pasar por UTC: `new Date(cita.fecha)` interpretaria
+ * "2026-09-14" como medianoche UTC y desplazaria el dia al huso del navegador.
+ */
+function finLocal(cita: CitaResumen): number {
+  const [a, m, d] = cita.fecha.split('-').map(Number);
+  const [hh, mm] = cita.hora.split(':').map(Number);
+  return new Date(a, m - 1, d, hh, mm + cita.duracionMinutos).getTime();
 }

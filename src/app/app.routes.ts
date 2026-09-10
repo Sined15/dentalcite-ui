@@ -157,6 +157,17 @@ export const routes: Routes = [
         loadComponent: () => import('./components/cita/agenda').then((m) => m.Agenda),
       },
 
+      // HU-16 · RF-22: la cola de citas por cerrar. Va **antes** que '/citas'
+      // no por precedencia —son rutas distintas— sino porque se lee junto a
+      // ella. El odontologo entra aqui aunque no alcance la agenda: son suyas.
+      {
+        path: 'citas/pendientes',
+        canActivate: [rolGuard],
+        data: { roles: AGENDA },
+        loadComponent: () =>
+          import('./components/cita/pendientes-cierre').then((m) => m.PendientesCierre),
+      },
+
       // HU-15 · RF-18, RF-19: las citas propias del paciente. Ruta aparte de
       // '/citas' y no un filtro suyo, porque el servidor tambien las separa:
       // GET /api/v1/citas es la agenda de la clinica y GET /api/v1/citas/mias
