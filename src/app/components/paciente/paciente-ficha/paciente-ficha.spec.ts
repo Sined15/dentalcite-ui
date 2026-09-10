@@ -25,6 +25,7 @@ function cita(id: string, fecha: string, estado: EstadoCita): CitaResumen {
     zonaHoraria: 'America/Lima',
     estado,
     motivoCancelacion: null,
+    cancelablePorPaciente: true,
     paciente: { fichaId: FICHA_ID, nombre: 'Rosa Huaman', numeroHistoria: 'HC-00001' },
     odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
     tratamiento: { id: 'tra-1', nombre: 'Endodoncia' },

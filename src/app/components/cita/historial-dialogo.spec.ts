@@ -19,6 +19,7 @@ const CITA: CitaResumen = {
   zonaHoraria: 'America/Lima',
   estado: 'CANCELADA',
   motivoCancelacion: 'El paciente reprograma',
+  cancelablePorPaciente: false,
   paciente: { fichaId: 'fic-1', nombre: 'Ana Torres', numeroHistoria: 'HC-00042' },
   odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
   tratamiento: { id: 'tra-1', nombre: 'Endodoncia' },

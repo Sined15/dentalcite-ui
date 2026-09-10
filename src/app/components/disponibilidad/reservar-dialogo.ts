@@ -25,6 +25,14 @@ export interface ReservarResultado {
   recargar?: string;
 }
 
+/** A quien pertenece la cita cuando no la reserva el propio paciente (HU-14). */
+export interface ReservarPara {
+  /** Identificador de la ficha, que es lo que viaja como `pacienteId`. */
+  id: string;
+  nombre: string;
+  numeroHistoria: string;
+}
+
 export interface ReservarDialogoDatos {
   tratamientoId: string;
   tratamientoNombre: string;
@@ -32,10 +40,16 @@ export interface ReservarDialogoDatos {
   /** "YYYY-MM-DD". */
   fecha: string;
   bloque: BloqueAgrupado;
+  /**
+   * Ausente cuando reserva el propio paciente (HU-09). Presente cuando reserva
+   * recepcion (HU-14): entonces se muestra de quien es la cita, porque quien
+   * confirma no es quien va a venir.
+   */
+  paciente?: ReservarPara;
 }
 
 /**
- * Confirmacion de la reserva (HU-09 · RF-15).
+ * Confirmacion de la reserva (HU-09 · RF-15, HU-14 · RF-17).
  *
  * RF-15 concede al paciente «reservar eligiendo tratamiento, odontologo y
  * franja», asi que el bloque no se reserva a ciegas: se ofrecen los odontologos
@@ -53,6 +67,17 @@ export interface ReservarDialogoDatos {
         <strong>{{ datos.tratamientoNombre }}</strong> · {{ datos.duracionMinutos }} min<br />
         {{ datos.fecha | date: "EEEE d 'de' MMMM" }}
       </p>
+
+      <!--
+        Recepcion confirma citas de otras personas una detras de otra: de quien
+        es esta tiene que estar delante al pulsar, no dos pantallas atras.
+      -->
+      @if (datos.paciente; as paciente) {
+        <p class="para">
+          Para <strong>{{ paciente.nombre }}</strong>
+          <span class="historia">Historia clínica {{ paciente.numeroHistoria }}</span>
+        </p>
+      }
 
       @if (odontologos.length > 1) {
         <fieldset>
@@ -131,6 +156,18 @@ export interface ReservarDialogoDatos {
     .unico {
       margin: 0 0 0.75rem;
     }
+    .para {
+      margin: 0 0 1rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      background: var(--mat-sys-surface-container-highest, #e2e2e6);
+      display: flex;
+      flex-direction: column;
+    }
+    .historia {
+      font-size: 0.8125rem;
+      color: var(--mat-sys-on-surface-variant, #45464f);
+    }
     /* Color propio en vez de opacidad: al 75 % el contraste caia a 4.45:1
        sobre el fondo del dialogo, por debajo del 4.5:1 que exige RNF-08. */
     .nota {
@@ -183,12 +220,18 @@ export class ReservarDialogo {
     this.enviando.set(true);
     this.error.set(null);
 
+    const paciente = this.datos.paciente;
     this.servicio
       .reservar({
         tratamientoId: this.datos.tratamientoId,
         odontologoId: this.odontologoElegido,
         fecha: this.datos.fecha,
         hora: this.horaElegida,
+        // Ausente, no vacio: cuando reserva el propio paciente la clave no
+        // viaja siquiera. El servidor responde 403 a un PACIENTE que la mande,
+        // aunque sea su propia ficha, asi que mandarla con `undefined` seria
+        // fiarlo todo a que JSON.stringify la descarte.
+        ...(paciente ? { pacienteId: paciente.id } : {}),
       })
       .subscribe({
         next: (cita) => {

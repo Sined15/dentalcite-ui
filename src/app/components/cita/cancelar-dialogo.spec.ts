@@ -19,6 +19,7 @@ const CITA: CitaResumen = {
   zonaHoraria: 'America/Lima',
   estado: 'CONFIRMADA',
   motivoCancelacion: null,
+  cancelablePorPaciente: true,
   paciente: { fichaId: 'fic-1', nombre: 'Ana Torres', numeroHistoria: 'HC-00042' },
   odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
   tratamiento: { id: 'tra-1', nombre: 'Endodoncia' },
@@ -39,8 +40,10 @@ describe('CancelarDialogo', () => {
   let componente: Interno;
   const cerrar = vi.fn();
 
-  function montar(): void {
-    const datos: CancelarDialogoDatos = { cita: CITA };
+  function montar(mostrarPaciente = true): void {
+    // Por defecto, el caso de recepcion (HU-11): identificar de quien es la cita
+    // es lo primero. El caso del paciente (HU-15) se prueba aparte.
+    const datos: CancelarDialogoDatos = { cita: CITA, mostrarPaciente };
     TestBed.configureTestingModule({
       imports: [CancelarDialogo],
       providers: [
@@ -144,6 +147,15 @@ describe('CancelarDialogo', () => {
 
     expect(cerrar).toHaveBeenCalledWith(false);
     httpMock.verify();
+  });
+
+  it('HU-15: cancelando la propia, no nombra al paciente', () => {
+    // Es quien esta mirando: decirle su propio nombre no informa de nada.
+    montar(false);
+
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('CIT-000123');
+    expect(texto).not.toContain('Ana Torres');
   });
 
   it('muestra a quien y cuando se esta cancelando', () => {

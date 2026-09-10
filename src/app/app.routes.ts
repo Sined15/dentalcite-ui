@@ -12,6 +12,9 @@ const RECEPCION = ['RECEPCIONISTA', 'ADMINISTRADOR'] as const;
 // RF-07 da la busqueda de pacientes al «personal»: los tres roles que atienden.
 const PERSONAL = ['RECEPCIONISTA', 'ADMINISTRADOR', 'ODONTOLOGO'] as const;
 const HORARIOS = ['ODONTOLOGO', 'ADMINISTRADOR'] as const;
+// HU-15: sus propias citas las ve y las cancela el paciente, y solo el paciente.
+// La agenda de la clinica es otra pantalla y otro rol.
+const SOLO_PACIENTE = ['PACIENTE'] as const;
 const ADMIN = ['ADMINISTRADOR'] as const;
 
 export const routes: Routes = [
@@ -152,6 +155,17 @@ export const routes: Routes = [
         canActivate: [rolGuard],
         data: { roles: RECEPCION },
         loadComponent: () => import('./components/cita/agenda').then((m) => m.Agenda),
+      },
+
+      // HU-15 · RF-18, RF-19: las citas propias del paciente. Ruta aparte de
+      // '/citas' y no un filtro suyo, porque el servidor tambien las separa:
+      // GET /api/v1/citas es la agenda de la clinica y GET /api/v1/citas/mias
+      // saca la ficha del token.
+      {
+        path: 'mis-citas',
+        canActivate: [rolGuard],
+        data: { roles: SOLO_PACIENTE },
+        loadComponent: () => import('./components/cita/mis-citas').then((m) => m.MisCitas),
       },
 
       // HU-13 · RF-07: la busqueda es del personal.

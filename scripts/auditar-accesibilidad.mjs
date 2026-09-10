@@ -64,6 +64,10 @@ const PANTALLAS = [
   // Sprint 3
   ['RECEPCIONISTA', '/pacientes'],
   ['RECEPCIONISTA', '/pacientes/nuevo'],
+  // HU-14: la misma ruta que ve el paciente, pero con el selector de paciente
+  // delante, que es un control mas —un combobox— y no se audita solo.
+  ['RECEPCIONISTA', '/disponibilidad'],
+  ['PACIENTE', '/mis-citas'],
 ];
 
 /**

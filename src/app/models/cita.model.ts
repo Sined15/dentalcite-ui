@@ -28,11 +28,15 @@ export interface Cita {
 /**
  * Cuerpo de `POST /api/v1/citas`.
  *
- * **No lleva paciente**: el servidor lo saca del token, asi que un paciente no
- * puede reservar en nombre de otro. Reservar por terceros es HU-14, que anadira
- * el campo cuando exista el permiso que lo respalde.
+ * `pacienteId` no es un campo opcional cualquiera: **quien puede mandarlo es lo
+ * contrario segun el rol**. El PACIENTE tiene que omitirlo —su ficha sale del
+ * token y mandarlo da 403, aunque sea la suya— y RECEPCIONISTA y ADMINISTRADOR
+ * tienen que incluirlo, porque su cuenta no tiene ficha para la que reservar
+ * (HU-14 · RF-17).
  */
 export interface CitaRequest {
+  /** La ficha del paciente. Solo lo manda recepcion o administracion. */
+  pacienteId?: string;
   tratamientoId: string;
   odontologoId: string;
   /** "YYYY-MM-DD". */
@@ -68,6 +72,15 @@ export interface CitaResumen {
   estado: EstadoCita;
   /** Solo en las canceladas. */
   motivoCancelacion: string | null;
+  /**
+   * Si el paciente titular puede cancelarla ahora por su cuenta (HU-15 · RN-06).
+   *
+   * Lo calcula el servidor: la regla tiene una excepcion —la cita que el propio
+   * paciente reservo con menos de la antelacion de la ventana— que depende de
+   * quien la creo y de cuando, y rehacerla aqui seria tenerla dos veces y con
+   * dos relojes. El portal solo obedece.
+   */
+  cancelablePorPaciente: boolean;
   paciente: CitaPaciente;
   odontologo: CitaReferencia;
   tratamiento: CitaReferencia;
@@ -81,6 +94,18 @@ export interface CitaQuery {
   /** "YYYY-MM-DD", inclusive. */
   hasta: string;
   odontologoId?: string;
+  estado?: EstadoCita | '';
+}
+
+/**
+ * Filtros de `GET /api/v1/citas/mias` (HU-15). Los tres son opcionales: sin
+ * rango se devuelven todas, que es lo que pide «las futuras y las pasadas».
+ */
+export interface MisCitasQuery {
+  /** "YYYY-MM-DD", inclusive. */
+  desde?: string;
+  /** "YYYY-MM-DD", inclusive. */
+  hasta?: string;
   estado?: EstadoCita | '';
 }
 

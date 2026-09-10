@@ -10,12 +10,14 @@ import {
   CitaQuery,
   CitaRequest,
   CitaResumen,
+  MisCitasQuery,
 } from '../models';
 import { buildPageParams } from './pagination.util';
 
 /**
- * Citas: reserva desde el portal (HU-09 · RF-15) y agenda de recepcion
- * (HU-11 · RF-18, RF-20, RF-21).
+ * Citas: reserva desde el portal (HU-09 · RF-15) y desde recepcion en nombre de
+ * un paciente (HU-14 · RF-17), y agenda de recepcion (HU-11 · RF-18, RF-20,
+ * RF-21).
  *
  * Respuestas que hay que distinguir: 422 si la franja incumple la ventana de
  * reserva (RN-05) y 409 si la cuota de citas activas esta agotada (RN-07), si la
@@ -27,7 +29,10 @@ export class CitaService {
   private readonly http = inject(HttpClient);
   private readonly url = `${environment.apiUrl}/api/v1/citas`;
 
-  /** HU-09 · PACIENTE, y solo para si mismo. */
+  /**
+   * HU-09 · PACIENTE para si mismo (sin `pacienteId`) y HU-14 · RECEPCIONISTA o
+   * ADMINISTRADOR en nombre de un paciente (con `pacienteId`).
+   */
   reservar(body: CitaRequest): Observable<Cita> {
     return this.http.post<Cita>(this.url, body);
   }
@@ -50,7 +55,35 @@ export class CitaService {
     return this.http.get<PageResponse<CitaResumen>>(this.url, { params });
   }
 
-  /** HU-11 · RF-20. Sin ventana: recepcion cancela incluso a ultima hora. */
+  /**
+   * HU-15 · RF-18 · PACIENTE: sus propias citas, futuras y pasadas.
+   *
+   * El rango es **opcional**, al reves que en `listar`: el criterio pide ver las
+   * futuras y las pasadas, asi que omitirlo significa «todas». La ficha no
+   * viaja: el servidor la saca del token, de modo que no hay forma de pedir las
+   * de otro.
+   */
+  mias(filtros: MisCitasQuery = {}, pagina: PageQuery = {}): Observable<PageResponse<CitaResumen>> {
+    let params = buildPageParams(pagina);
+    // Ausente, no vacio: un parametro vacio no significa «todos».
+    if (filtros.desde) {
+      params = params.set('desde', filtros.desde);
+    }
+    if (filtros.hasta) {
+      params = params.set('hasta', filtros.hasta);
+    }
+    if (filtros.estado) {
+      params = params.set('estado', filtros.estado);
+    }
+    return this.http.get<PageResponse<CitaResumen>>(`${this.url}/mias`, { params });
+  }
+
+  /**
+   * HU-11 · RF-20 · RECEPCIONISTA y ADMINISTRADOR, sin ventana: cancelan incluso
+   * a ultima hora. HU-15 · RF-19 · PACIENTE, solo la suya y dentro de la ventana
+   * de RN-06; fuera de ella el servidor responde 422 y dice que hay que llamar a
+   * recepcion.
+   */
   cancelar(id: string, motivo: string): Observable<Cita> {
     const body: CancelacionRequest = { motivo };
     return this.http.patch<Cita>(`${this.url}/${id}/cancelar`, body);

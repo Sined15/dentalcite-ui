@@ -1,8 +1,9 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatDialog } from '@angular/material/dialog';
@@ -12,6 +13,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ActivatedRoute } from '@angular/router';
+import { debounceTime, distinctUntilChanged, switchMap, tap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeError } from '../../core/http/api-error';
 import {
@@ -21,10 +24,12 @@ import {
   Odontologo,
   PASO_AGRUPACION_MINUTOS,
   PASO_MOTOR_MINUTOS,
+  Paciente,
   Tratamiento,
 } from '../../models';
 import { DisponibilidadService } from '../../services/disponibilidad.service';
 import { OdontologoService } from '../../services/odontologo.service';
+import { PacienteService } from '../../services/paciente.service';
 import { TratamientoService } from '../../services/tratamiento.service';
 import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
 import { BloqueAgrupado, DiaAgrupado, agruparFranjas } from './agrupar-franjas';
@@ -36,6 +41,7 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
   imports: [
     DatePipe,
     ReactiveFormsModule,
+    MatAutocompleteModule,
     MatButtonModule,
     MatButtonToggleModule,
     MatCardModule,
@@ -51,6 +57,40 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
     <mat-card class="tarjeta">
       <mat-card-content>
         <form [formGroup]="formulario" (ngSubmit)="consultar()">
+          <!--
+            HU-14 · RF-17: recepcion reserva en nombre de un paciente, asi que lo
+            primero es decir de quien es la cita. El PACIENTE no ve este campo:
+            reserva para si mismo y su ficha sale del token.
+          -->
+          @if (reservaParaOtro()) {
+            <mat-form-field appearance="outline">
+              <mat-label>Paciente</mat-label>
+              <input
+                matInput
+                formControlName="paciente"
+                [matAutocomplete]="autoPaciente"
+                placeholder="Documento, apellidos o número de historia"
+                autocomplete="off"
+              />
+              <mat-autocomplete
+                #autoPaciente="matAutocomplete"
+                [displayWith]="mostrarPaciente"
+                (optionSelected)="elegirPaciente($event.option.value)"
+              >
+                @for (p of pacientes(); track p.id) {
+                  <mat-option [value]="p">
+                    {{ p.apellidos }}, {{ p.nombres }} · {{ p.numeroHistoria }}
+                  </mat-option>
+                }
+              </mat-autocomplete>
+              @if (pacienteElegido(); as elegido) {
+                <mat-hint>Reservando para {{ elegido.numeroHistoria }}</mat-hint>
+              } @else {
+                <mat-hint>Busca al paciente antes de elegir la franja.</mat-hint>
+              }
+            </mat-form-field>
+          }
+
           <mat-form-field appearance="outline">
             <mat-label>Tratamiento</mat-label>
             <mat-select formControlName="tratamientoId">
@@ -188,10 +228,11 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
               @for (bloque of dia.bloques; track bloque.inicio) {
                 <li>
                   <!--
-                    Solo el paciente reserva, y solo para si mismo (HU-09). Para el
-                    resto de roles la franja es informacion: un boton que devolviera
-                    403 al pulsarlo seria un fallo de diseno. Reservar en nombre de
-                    otro es HU-14.
+                    Reservan el paciente para si mismo (HU-09) y recepcion o
+                    administracion en nombre de un paciente ya elegido (HU-14).
+                    Para el odontologo la franja es informacion: un boton que
+                    devolviera 403 al pulsarlo seria un fallo de diseno, y lo
+                    mismo vale para recepcion sin paciente, que daria 400.
                   -->
                   @if (puedeReservar()) {
                     <button
@@ -348,12 +389,37 @@ export class Disponibilidad {
   private readonly servicio = inject(DisponibilidadService);
   private readonly tratamientoService = inject(TratamientoService);
   private readonly odontologoService = inject(OdontologoService);
+  private readonly pacienteService = inject(PacienteService);
   private readonly dialogo = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly auth = inject(AuthService);
+  private readonly ruta = inject(ActivatedRoute);
 
-  /** RF-15: reservar es del paciente. Los demás roles solo consultan (HU-14). */
-  protected readonly puedeReservar = computed(() => this.auth.rol() === 'PACIENTE');
+  /**
+   * HU-14 · RF-17: recepción y administración reservan en nombre de otro, así que
+   * tienen que elegir antes de quién es la cita. El paciente no: reserva para sí
+   * mismo (HU-09).
+   */
+  protected readonly reservaParaOtro = computed(() => {
+    const rol = this.auth.rol();
+    return rol === 'RECEPCIONISTA' || rol === 'ADMINISTRADOR';
+  });
+
+  /** Resultados de la búsqueda de pacientes, y el que se ha elegido. */
+  protected readonly pacientes = signal<Paciente[]>([]);
+  protected readonly pacienteElegido = signal<Paciente | null>(null);
+
+  /**
+   * RF-15: reservar es del paciente para sí mismo o de recepción para alguien.
+   * Un odontólogo no reserva, y recepción sin paciente elegido tampoco: el botón
+   * daría un 400 al pulsarlo.
+   */
+  protected readonly puedeReservar = computed(() => {
+    if (this.auth.rol() === 'PACIENTE') {
+      return true;
+    }
+    return this.reservaParaOtro() && this.pacienteElegido() !== null;
+  });
   /** La última reserva de esta sesión, para que su código siga a la vista. */
   protected readonly ultimaReserva = signal<Cita | null>(null);
 
@@ -371,6 +437,9 @@ export class Disponibilidad {
 
   protected readonly formulario = this.fb.nonNullable.group(
     {
+      // Guarda el objeto elegido, no una cadena: el autocompletado necesita el
+      // paciente entero para pintarlo y para mandar su identificador.
+      paciente: [null as Paciente | string | null],
       tratamientoId: ['', [Validators.required]],
       odontologoId: [''],
       desde: [hoy(), [Validators.required]],
@@ -453,6 +522,85 @@ export class Disponibilidad {
         this.formulario.controls.odontologoId.setValue('');
       }
     });
+
+    if (this.reservaParaOtro()) {
+      this.prepararBusquedaDePacientes();
+      this.precargarPacienteDeLaUrl();
+    }
+  }
+
+  /**
+   * HU-13 · RF-07 reutilizado: el mismo endpoint de búsqueda del listado de
+   * pacientes, con el mismo término único para documento, apellidos y número de
+   * historia.
+   *
+   * <p>El `debounceTime` no es cosmética: sin él, cada tecla sería una consulta
+   * paginada contra la base, que es justo lo que RNF-02 mide. El
+   * `distinctUntilChanged` evita repetir la consulta cuando el valor no cambia,
+   * y `switchMap` descarta la respuesta de una búsqueda que ya no interesa —sin
+   * él, una respuesta lenta podría pisar a la de la siguiente letra.
+   */
+  private prepararBusquedaDePacientes(): void {
+    this.formulario.controls.paciente.valueChanges
+      .pipe(
+        // Volver a escribir deshace la elección, y **antes** del retardo: si
+        // esperase al `debounceTime`, entre la primera tecla y la consulta el
+        // botón seguiría ofreciendo reservar para quien ya no está escrito.
+        tap((valor) => {
+          if (typeof valor === 'string') {
+            this.pacienteElegido.set(null);
+          }
+        }),
+        debounceTime(300),
+        distinctUntilChanged(),
+        switchMap((valor) => {
+          // Al elegir una opción, el control pasa a contener el objeto: eso no es
+          // un término de búsqueda y no debe disparar otra consulta.
+          const termino = typeof valor === 'string' ? valor.trim() : '';
+          if (termino.length < 2) {
+            this.pacientes.set([]);
+            return [];
+          }
+          return this.pacienteService.buscar(termino, { size: 10 });
+        }),
+        // `valueChanges` no termina nunca: sin esto la suscripción sobreviviría a
+        // la pantalla.
+        takeUntilDestroyed(),
+      )
+      .subscribe({
+        next: (pagina) => this.pacientes.set(pagina.content),
+        error: (err: unknown) => this.error.set(mensajeDeError(err)),
+      });
+  }
+
+  /**
+   * Se llega aquí desde la ficha del paciente con `?pacienteId=…`, que es el
+   * camino natural: primero se le busca (HU-13) y desde su ficha se reserva.
+   */
+  private precargarPacienteDeLaUrl(): void {
+    const id = this.ruta.snapshot.queryParamMap.get('pacienteId');
+    if (!id) {
+      return;
+    }
+    this.pacienteService.obtener(id).subscribe({
+      next: (detalle) => {
+        this.pacienteElegido.set(detalle);
+        this.formulario.controls.paciente.setValue(detalle, { emitEvent: false });
+      },
+      error: (err: unknown) => this.error.set(mensajeDeError(err)),
+    });
+  }
+
+  /** Cómo se escribe el paciente elegido dentro del campo. */
+  protected mostrarPaciente(paciente: Paciente | string | null): string {
+    if (!paciente || typeof paciente === 'string') {
+      return typeof paciente === 'string' ? paciente : '';
+    }
+    return `${paciente.apellidos}, ${paciente.nombres} · ${paciente.numeroHistoria}`;
+  }
+
+  protected elegirPaciente(paciente: Paciente): void {
+    this.pacienteElegido.set(paciente);
   }
 
   protected consultar(): void {
@@ -496,12 +644,23 @@ export class Disponibilidad {
       return;
     }
 
+    const paciente = this.pacienteElegido();
     const datos: ReservarDialogoDatos = {
       tratamientoId: tratamiento.id,
       tratamientoNombre: tratamiento.nombre,
       duracionMinutos: tratamiento.duracionMinutos,
       fecha: dia.fecha,
       bloque,
+      // Solo cuando reserva recepción: si lo mandara un PACIENTE, el servidor
+      // respondería 403 aunque fuese su propia ficha.
+      paciente:
+        this.reservaParaOtro() && paciente
+          ? {
+              id: paciente.id,
+              nombre: `${paciente.apellidos}, ${paciente.nombres}`,
+              numeroHistoria: paciente.numeroHistoria,
+            }
+          : undefined,
     };
 
     this.dialogo

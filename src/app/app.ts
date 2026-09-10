@@ -79,6 +79,12 @@ const MENU: readonly EntradaMenu[] = [
     icono: 'event_note',
     roles: ['RECEPCIONISTA', 'ADMINISTRADOR'],
   },
+  {
+    ruta: '/mis-citas',
+    etiqueta: 'Mis citas',
+    icono: 'event_note',
+    roles: ['PACIENTE'],
+  },
 ];
 
 @Component({

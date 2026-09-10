@@ -11,7 +11,14 @@ import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../core/http/api.types';
-import { Cita, DisponibilidadResponse, Especialidad, Odontologo, Tratamiento } from '../../models';
+import {
+  Cita,
+  DisponibilidadResponse,
+  Especialidad,
+  Odontologo,
+  Paciente,
+  Tratamiento,
+} from '../../models';
 import { Disponibilidad } from './disponibilidad';
 import { ReservarResultado } from './reservar-dialogo';
 
@@ -116,6 +123,18 @@ const CITA: Cita = {
   consultorio: { id: 'con-1', nombre: 'Consultorio 2' },
 };
 
+/** La ficha que recepcion elige para reservar en su nombre (HU-14). */
+const PACIENTE: Paciente = {
+  id: 'fic-9',
+  numeroHistoria: 'HC-00042',
+  tipoDocumento: 'DNI',
+  documento: '87654321',
+  nombres: 'Julio',
+  apellidos: 'Ramos',
+  telefono: null,
+  tieneCuenta: false,
+};
+
 interface Interno {
   formulario: {
     patchValue: (valores: Record<string, string>) => void;
@@ -132,6 +151,10 @@ interface Interno {
   abrirReserva: (dia: unknown, bloque: unknown) => void;
   ultimaReserva: () => Cita | null;
   puedeReservar: () => boolean;
+  reservaParaOtro: () => boolean;
+  pacienteElegido: () => Paciente | null;
+  elegirPaciente: (p: Paciente) => void;
+  mostrarPaciente: (p: Paciente | string | null) => string;
   paso: { set: (v: number) => void };
   consultar: () => void;
   error: () => string | null;
@@ -161,6 +184,7 @@ describe('Disponibilidad', () => {
   let httpMock: HttpTestingController;
   let componente: Interno;
   const abiertos: unknown[] = [];
+  const datosAbiertos: unknown[] = [];
 
   afterEach(() => localStorage.clear());
 
@@ -176,9 +200,11 @@ describe('Disponibilidad', () => {
     // El overlay de Material no aporta nada aqui: interesa que el flujo de
     // reserva encadene bien, no como se pinta el dialogo (eso es su propio spec).
     abiertos.length = 0;
+    datosAbiertos.length = 0;
     const dialogoDoble = {
-      open: (componente: unknown) => {
+      open: (componente: unknown, config?: { data?: unknown }) => {
         abiertos.push(componente);
+        datosAbiertos.push(config?.data);
         return { afterClosed: () => of(abiertos.length === 1 ? cierraCon : null) };
       },
     };
@@ -434,6 +460,52 @@ describe('Disponibilidad', () => {
     expect(componente.puedeReservar()).toBe(false);
     expect(raiz.querySelectorAll('button.franja')).toHaveLength(0);
     expect(raiz.querySelectorAll('.franja').length).toBeGreaterThan(0);
+  });
+
+  it('HU-14: para RECEPCIONISTA sin paciente elegido la franja todavia no es un boton', async () => {
+    // El servidor respondería 400 —«indique el paciente»—, así que ofrecer el
+    // botón sería mandar a pulsar algo que no puede funcionar.
+    await montarComo('RECEPCIONISTA');
+    await consultarConResultado();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(componente.reservaParaOtro()).toBe(true);
+    expect(componente.puedeReservar()).toBe(false);
+    expect(raiz.querySelectorAll('button.franja')).toHaveLength(0);
+  });
+
+  it('HU-14: con el paciente elegido, RECEPCIONISTA ya puede reservar', async () => {
+    await montarComo('RECEPCIONISTA');
+    componente.elegirPaciente(PACIENTE);
+    await consultarConResultado();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(componente.puedeReservar()).toBe(true);
+    expect(raiz.querySelectorAll('button.franja').length).toBeGreaterThan(0);
+  });
+
+  it('HU-14: pasa al dialogo la ficha del paciente elegido', async () => {
+    await montarComo('RECEPCIONISTA');
+    componente.elegirPaciente(PACIENTE);
+    await consultarConResultado();
+
+    componente.abrirReserva(componente.dias()[0], componente.dias()[0].bloques[0]);
+    await fixture.whenStable();
+
+    const datos = datosAbiertos[0] as { paciente?: { id: string; numeroHistoria: string } };
+    expect(datos.paciente?.id).toBe('fic-9');
+    expect(datos.paciente?.numeroHistoria).toBe('HC-00042');
+  });
+
+  it('HU-09: al PACIENTE no se le pasa ficha al dialogo, aunque exista el campo', async () => {
+    // Mandarla daría 403 incluso siendo la suya: la clave no debe viajar.
+    await consultarConResultado();
+
+    componente.abrirReserva(componente.dias()[0], componente.dias()[0].bloques[0]);
+    await fixture.whenStable();
+
+    const datos = datosAbiertos[0] as { paciente?: unknown };
+    expect(datos.paciente).toBeUndefined();
   });
 
   it('tras reservar deja el codigo a la vista y repite la consulta', async () => {

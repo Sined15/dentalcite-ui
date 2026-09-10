@@ -376,7 +376,8 @@ export class Agenda {
   }
 
   protected cancelar(cita: CitaResumen): void {
-    const datos: CancelarDialogoDatos = { cita };
+    // Recepcion atiende citas de terceros: de quien es tiene que verse.
+    const datos: CancelarDialogoDatos = { cita, mostrarPaciente: true };
     this.dialogo
       .open(CancelarDialogo, { data: datos })
       .afterClosed()

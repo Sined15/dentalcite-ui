@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { environment } from '../../../environments/environment';
 import { Cita } from '../../models';
 import { BloqueAgrupado } from './agrupar-franjas';
-import { ReservarDialogo, ReservarDialogoDatos } from './reservar-dialogo';
+import { ReservarDialogo, ReservarDialogoDatos, ReservarPara } from './reservar-dialogo';
 
 const API = `${environment.apiUrl}/api/v1/citas`;
 
@@ -53,13 +53,14 @@ describe('ReservarDialogo', () => {
   let componente: Interno;
   const cerrar = vi.fn();
 
-  function montar(bloque: BloqueAgrupado = BLOQUE): void {
+  function montar(bloque: BloqueAgrupado = BLOQUE, paciente?: ReservarPara): void {
     const datos: ReservarDialogoDatos = {
       tratamientoId: 'tra-1',
       tratamientoNombre: 'Endodoncia',
       duracionMinutos: 30,
       fecha: '2026-10-12',
       bloque,
+      paciente,
     };
 
     TestBed.configureTestingModule({
@@ -113,9 +114,9 @@ describe('ReservarDialogo', () => {
     expect(componente.horaElegida).toBe('09:15');
   });
 
-  it('envia fecha y hora, y no envia paciente', async () => {
-    // HU-14: el paciente sale del token. Que el cuerpo no lo lleve es lo que
-    // impide reservar en nombre de otro.
+  it('reservando el propio paciente, envia fecha y hora y no envia paciente', async () => {
+    // HU-09: la ficha sale del token. Si el cuerpo la llevara, el servidor
+    // respondería 403 aunque fuese la suya, así que la clave no viaja siquiera.
     montar();
     componente.confirmar();
 
@@ -129,6 +130,32 @@ describe('ReservarDialogo', () => {
     });
     expect(Object.keys(req.request.body)).not.toContain('pacienteId');
     req.flush(CITA);
+  });
+
+  it('reservando desde recepcion, envia la ficha del paciente', async () => {
+    // HU-14 · RF-17: es lo único que cambia en el cuerpo respecto de HU-09.
+    montar(BLOQUE, { id: 'ficha-9', nombre: 'Ramos, Julio', numeroHistoria: 'HC-00042' });
+    componente.confirmar();
+
+    const req = httpMock.expectOne(API);
+    expect(req.request.body).toEqual({
+      pacienteId: 'ficha-9',
+      tratamientoId: 'tra-1',
+      odontologoId: 'odo-1',
+      fecha: '2026-10-12',
+      hora: '09:00',
+    });
+    req.flush(CITA);
+  });
+
+  it('reservando desde recepcion, muestra de quien es la cita', () => {
+    // Quien confirma no es quien va a venir: recepción encadena reservas de
+    // personas distintas y el nombre tiene que estar delante al pulsar.
+    montar(BLOQUE, { id: 'ficha-9', nombre: 'Ramos, Julio', numeroHistoria: 'HC-00042' });
+
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('Ramos, Julio');
+    expect(texto).toContain('HC-00042');
   });
 
   it('al reservar cierra el dialogo devolviendo la cita', () => {

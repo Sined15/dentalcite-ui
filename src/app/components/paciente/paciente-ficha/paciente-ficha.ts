@@ -8,7 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { mensajeDeError } from '../../../core/http/api-error';
 import { CitaResumen, PacienteDetalle } from '../../../models';
@@ -27,6 +27,7 @@ import { PacienteService } from '../../../services/paciente.service';
   selector: 'app-paciente-ficha',
   imports: [
     DatePipe,
+    RouterLink,
     ReactiveFormsModule,
     MatButtonModule,
     MatCardModule,
@@ -49,6 +50,22 @@ import { PacienteService } from '../../../services/paciente.service';
       <p class="ayuda">
         Historia clínica {{ p.numeroHistoria }} · {{ p.tipoDocumento }} {{ p.documento }}
       </p>
+
+      <!--
+        HU-14 · RF-17: es el camino natural para atender a quien llama o se
+        acerca al mostrador —se le busca, se abre su ficha y se reserva—, y lleva
+        al paciente ya elegido. Solo para quien puede ejercerlo: al odontologo y
+        al propio paciente el servidor les devolveria 403.
+      -->
+      @if (puedeReservar()) {
+        <p class="acciones-ficha">
+          <a mat-flat-button color="primary" [routerLink]="['/disponibilidad']"
+             [queryParams]="{ pacienteId: p.id }">
+            <mat-icon>event_available</mat-icon>
+            Reservar cita
+          </a>
+        </p>
+      }
 
       <div class="columnas">
         <mat-card class="tarjeta">
@@ -152,8 +169,11 @@ import { PacienteService } from '../../../services/paciente.service';
       margin: 1rem 0 0.5rem;
     }
     .ayuda {
-      margin: 0 0 1rem;
+      margin: 0 0 0.75rem;
       color: var(--mat-sys-on-surface-variant, #49454f);
+    }
+    .acciones-ficha {
+      margin: 0 0 1rem;
     }
     .columnas {
       display: flex;
@@ -245,6 +265,11 @@ export class PacienteFicha {
   protected puedeEditar(): boolean {
     const rol = this.auth.rol();
     return rol === 'RECEPCIONISTA' || rol === 'ADMINISTRADOR';
+  }
+
+  /** HU-14 · RF-17: reservar en nombre de otro es de recepción y administración. */
+  protected puedeReservar(): boolean {
+    return this.puedeEditar();
   }
 
   constructor() {

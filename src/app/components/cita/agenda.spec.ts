@@ -56,6 +56,7 @@ function cita(id: string, hora: string, estado: CitaResumen['estado'] = 'CONFIRM
     zonaHoraria: 'America/Lima',
     estado,
     motivoCancelacion: estado === 'CANCELADA' ? 'El paciente reprograma' : null,
+    cancelablePorPaciente: estado === 'CONFIRMADA',
     paciente: { fichaId: 'fic-1', nombre: 'Ana Torres', numeroHistoria: 'HC-00042' },
     odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
     tratamiento: { id: 'tra-1', nombre: 'Endodoncia' },
