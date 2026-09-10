@@ -61,6 +61,8 @@ const PANTALLAS = [
   ['ADMINISTRADOR', '/disponibilidad'],
   ['PACIENTE', '/disponibilidad'],
   ['RECEPCIONISTA', '/citas'],
+  // Sprint 3
+  ['RECEPCIONISTA', '/pacientes/nuevo'],
 ];
 
 /** RNF-09 fija 360px como ancho mínimo; se audita ahí y en escritorio. */

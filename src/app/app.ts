@@ -68,6 +68,12 @@ const MENU: readonly EntradaMenu[] = [
     roles: ['PACIENTE', 'RECEPCIONISTA', 'ODONTOLOGO', 'ADMINISTRADOR'],
   },
   {
+    ruta: '/pacientes/nuevo',
+    etiqueta: 'Registrar paciente',
+    icono: 'person_add',
+    roles: ['RECEPCIONISTA', 'ADMINISTRADOR'],
+  },
+  {
     ruta: '/citas',
     etiqueta: 'Agenda',
     icono: 'event_note',

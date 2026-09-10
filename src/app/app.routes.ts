@@ -152,6 +152,16 @@ export const routes: Routes = [
         loadComponent: () => import('./components/cita/agenda').then((m) => m.Agenda),
       },
 
+      // HU-12: el alta presencial del paciente. HU-13 anadira /pacientes con la
+      // busqueda, y entonces esta pasara a colgar de aquel listado.
+      {
+        path: 'pacientes/nuevo',
+        canActivate: [rolGuard],
+        data: { roles: RECEPCION },
+        loadComponent: () =>
+          import('./components/paciente/paciente-edit/paciente-edit').then((m) => m.PacienteEdit),
+      },
+
       {
         path: 'usuarios',
         canActivate: [rolGuard],
