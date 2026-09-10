@@ -32,12 +32,13 @@ const PUERTO_CDP = 9222;
 const CUENTAS = {
   ADMINISTRADOR: 'admin@dentalcite.com',
   ODONTOLOGO: 'dr.perez@dentalcite.com',
+  RECEPCIONISTA: 'recepcion@dentalcite.com',
   PACIENTE: 'paciente@demo.com',
 };
 const PASSWORD = 'Password123';
 
 /**
- * Pantallas del Sprint 1, cada una con el rol que la alcanza. Las públicas van
+ * Pantallas del alcance construido, cada una con el rol que la alcanza. Las públicas van
  * sin rol: se visitan sin sesión, que es como las ve un visitante.
  */
 const PANTALLAS = [
@@ -56,11 +57,15 @@ const PANTALLAS = [
   ['ADMINISTRADOR', '/bloqueos/nuevo'],
   ['PACIENTE', '/tratamientos'],
   ['ODONTOLOGO', '/bloqueos'],
+  // Sprint 2
+  ['ADMINISTRADOR', '/disponibilidad'],
+  ['PACIENTE', '/disponibilidad'],
+  ['RECEPCIONISTA', '/citas'],
 ];
 
 /** RNF-09 fija 360px como ancho mínimo; se audita ahí y en escritorio. */
 const ANCHOS = [
-  [390, 844, 'móvil'],
+  [360, 800, 'móvil'],
   [1440, 900, 'escritorio'],
 ];
 

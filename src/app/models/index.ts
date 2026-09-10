@@ -7,3 +7,5 @@ export * from './odontologo.model';
 export * from './horario.model';
 export * from './bloqueo.model';
 export * from './consultorio.model';
+export * from './disponibilidad.model';
+export * from './cita.model';

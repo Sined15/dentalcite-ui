@@ -4,6 +4,11 @@ import { rolGuard } from './core/auth/rol.guard';
 
 const TODOS = ['PACIENTE', 'RECEPCIONISTA', 'ODONTOLOGO', 'ADMINISTRADOR'] as const;
 const AGENDA = ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'] as const;
+// HU-11: la agenda de citas expone los datos de todos los pacientes, asi que no
+// puede reutilizar AGENDA —que incluye al ODONTOLOGO, y sus citas son solo las
+// suyas—. Que el odontologo vea las propias es parte de RF-18, pero con la
+// comprobacion de propiedad que HU-15 traera.
+const RECEPCION = ['RECEPCIONISTA', 'ADMINISTRADOR'] as const;
 const HORARIOS = ['ODONTOLOGO', 'ADMINISTRADOR'] as const;
 const ADMIN = ['ADMINISTRADOR'] as const;
 
@@ -127,6 +132,24 @@ export const routes: Routes = [
         canActivate: [rolGuard],
         data: { roles: HORARIOS },
         loadComponent: () => import('./components/horario/horario-list').then((m) => m.HorarioList),
+      },
+
+      // HU-08: la consulta de franjas la ve cualquier rol autenticado, porque
+      // el paciente es su destinatario principal.
+      {
+        path: 'disponibilidad',
+        canActivate: [rolGuard],
+        data: { roles: TODOS },
+        loadComponent: () =>
+          import('./components/disponibilidad/disponibilidad').then((m) => m.Disponibilidad),
+      },
+
+      // HU-11: la agenda del dia y la cancelacion desde recepcion.
+      {
+        path: 'citas',
+        canActivate: [rolGuard],
+        data: { roles: RECEPCION },
+        loadComponent: () => import('./components/cita/agenda').then((m) => m.Agenda),
       },
 
       {

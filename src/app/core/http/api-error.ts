@@ -46,6 +46,11 @@ export function mensajeDeError(error: unknown): string {
       return 'El recurso solicitado no existe.';
     case 409:
       return 'La operacion entra en conflicto con el estado actual.';
+    // HU-09: la peticion es correcta pero incumple una regla de negocio, como la
+    // ventana de reserva de RN-05. El backend suele explicar cual en `message`;
+    // esto solo cubre el caso en que no lo haga.
+    case 422:
+      return 'La solicitud no cumple una regla del sistema.';
     case 423:
       return 'Cuenta bloqueada temporalmente. Intentalo de nuevo en unos minutos.';
     default:

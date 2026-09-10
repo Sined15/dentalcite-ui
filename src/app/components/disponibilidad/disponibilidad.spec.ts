@@ -1,0 +1,495 @@
+import { registerLocaleData } from '@angular/common';
+import localeEsPe from '@angular/common/locales/es-PE';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { provideRouter } from '@angular/router';
+import { of } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { environment } from '../../../environments/environment';
+import { PageResponse } from '../../core/http/api.types';
+import { Cita, DisponibilidadResponse, Especialidad, Odontologo, Tratamiento } from '../../models';
+import { Disponibilidad } from './disponibilidad';
+import { ReservarResultado } from './reservar-dialogo';
+
+const API = `${environment.apiUrl}/api/v1/disponibilidad`;
+const API_TRATAMIENTOS = `${environment.apiUrl}/api/v1/tratamientos`;
+const API_ODONTOLOGOS = `${environment.apiUrl}/api/v1/odontologos`;
+
+const ENDODONCIA: Especialidad = {
+  id: 'esp-1',
+  nombre: 'ENDODONCIA',
+  descripcion: null,
+  activo: true,
+};
+const ORTODONCIA: Especialidad = {
+  id: 'esp-2',
+  nombre: 'ORTODONCIA',
+  descripcion: null,
+  activo: true,
+};
+
+const TRATAMIENTOS: Tratamiento[] = [
+  {
+    id: 'tra-1',
+    codigo: 'T-001',
+    nombre: 'Endodoncia',
+    descripcion: null,
+    duracionMinutos: 30,
+    especialidad: ENDODONCIA,
+    activo: true,
+  },
+  {
+    id: 'tra-2',
+    codigo: 'T-002',
+    nombre: 'Tratamiento retirado',
+    descripcion: null,
+    duracionMinutos: 30,
+    especialidad: ENDODONCIA,
+    activo: false,
+  },
+];
+
+function odontologo(id: string, nombres: string, especialidades: Especialidad[]): Odontologo {
+  return {
+    id,
+    cop: `COP-${id}`,
+    nombres,
+    apellidos: 'Apellido',
+    fichaId: `fic-${id}`,
+    activo: true,
+    especialidades,
+  };
+}
+
+const ODONTOLOGOS: Odontologo[] = [
+  odontologo('odo-1', 'Juan', [ENDODONCIA]),
+  odontologo('odo-2', 'Ana', [ORTODONCIA]),
+  { ...odontologo('odo-3', 'Baja', [ENDODONCIA]), activo: false },
+];
+
+function pagina<T>(content: T[]): PageResponse<T> {
+  return {
+    content,
+    totalElements: content.length,
+    totalPages: 1,
+    number: 0,
+    size: 100,
+    first: true,
+    last: true,
+    numberOfElements: content.length,
+    empty: content.length === 0,
+  };
+}
+
+/** Lo que devuelve el motor: granularidad de quince minutos (RN-04). */
+const RESPUESTA: DisponibilidadResponse = {
+  tratamientoId: 'tra-1',
+  duracionMinutos: 30,
+  desde: '2026-09-14',
+  hasta: '2026-09-14',
+  zonaHoraria: 'America/Lima',
+  odontologos: [
+    {
+      id: 'odo-1',
+      nombres: 'Juan',
+      apellidos: 'Pérez',
+      dias: [{ fecha: '2026-09-14', inicios: ['09:00:00', '09:15:00', '09:30:00'] }],
+    },
+  ],
+};
+
+/** Lo que devolveria la reserva; el dialogo se sustituye por un doble. */
+const CITA: Cita = {
+  id: 'cita-1',
+  codigo: 'CIT-000123',
+  fecha: '2026-09-14',
+  hora: '09:00:00',
+  duracionMinutos: 30,
+  zonaHoraria: 'America/Lima',
+  estado: 'CONFIRMADA',
+  tratamiento: { id: 'tra-1', nombre: 'Endodoncia' },
+  odontologo: { id: 'odo-1', nombre: 'Juan Perez' },
+  consultorio: { id: 'con-1', nombre: 'Consultorio 2' },
+};
+
+interface Interno {
+  formulario: {
+    patchValue: (valores: Record<string, string>) => void;
+    invalid: boolean;
+    hasError: (codigo: string) => boolean;
+    controls: { odontologoId: { value: string } };
+  };
+  odontologosAptos: () => Odontologo[];
+  tratamientos: () => Tratamiento[];
+  dias: () => {
+    fecha: string;
+    bloques: { inicio: string; inicios: string[]; odontologos: unknown[] }[];
+  }[];
+  abrirReserva: (dia: unknown, bloque: unknown) => void;
+  ultimaReserva: () => Cita | null;
+  puedeReservar: () => boolean;
+  paso: { set: (v: number) => void };
+  consultar: () => void;
+  error: () => string | null;
+}
+
+// El `TestBed` no monta `appConfig`, asi que sin esto el DatePipe caeria a
+// en-US y la prueba del encabezado comprobaria un idioma que la aplicacion no
+// usa. Se replica lo que hace `app.config.ts`.
+registerLocaleData(localeEsPe);
+
+/** JWT sin firmar: solo se decodifica el payload, como en auth.guards.spec.ts. */
+function sesionCon(rol: string): string {
+  const b64 = (o: unknown) =>
+    btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const payload = {
+    iss: 'dentalcite',
+    sub: 'a13d43f3-8930-4f00-baf2-70d492be76b2',
+    rol,
+    requiere_cambio_password: false,
+    exp: Math.floor(Date.now() / 1000) + 8 * 3600,
+  };
+  return `${b64({ alg: 'HS256' })}.${b64(payload)}.firma`;
+}
+
+describe('Disponibilidad', () => {
+  let fixture: ComponentFixture<Disponibilidad>;
+  let httpMock: HttpTestingController;
+  let componente: Interno;
+  const abiertos: unknown[] = [];
+
+  afterEach(() => localStorage.clear());
+
+  // Lo que devuelve `ReservarDialogo` al cerrarse, no una cita suelta: la
+  // pantalla distingue «reservada» de «recarga esto» por la forma del objeto.
+  async function montarComo(
+    rol: string,
+    cierraCon: ReservarResultado | null = { cita: CITA },
+  ): Promise<void> {
+    TestBed.resetTestingModule();
+    localStorage.clear();
+    localStorage.setItem('dentalcite.token', sesionCon(rol));
+    // El overlay de Material no aporta nada aqui: interesa que el flujo de
+    // reserva encadene bien, no como se pinta el dialogo (eso es su propio spec).
+    abiertos.length = 0;
+    const dialogoDoble = {
+      open: (componente: unknown) => {
+        abiertos.push(componente);
+        return { afterClosed: () => of(abiertos.length === 1 ? cierraCon : null) };
+      },
+    };
+    TestBed.configureTestingModule({
+      imports: [Disponibilidad],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: LOCALE_ID, useValue: 'es-PE' },
+        { provide: MatDialog, useValue: dialogoDoble },
+      ],
+    });
+    httpMock = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(Disponibilidad);
+    componente = fixture.componentInstance as unknown as Interno;
+
+    // El componente carga los dos catalogos en el constructor.
+    httpMock.expectOne((r) => r.url === API_TRATAMIENTOS).flush(pagina(TRATAMIENTOS));
+    httpMock.expectOne((r) => r.url === API_ODONTOLOGOS).flush(pagina(ODONTOLOGOS));
+    await fixture.whenStable();
+  }
+
+  beforeEach(async () => {
+    // El destinatario de HU-09 es el paciente; los casos de otros roles lo dicen.
+    await montarComo('PACIENTE');
+  });
+
+  it('descarta del selector los tratamientos dados de baja', () => {
+    expect(componente.tratamientos().map((t) => t.id)).toEqual(['tra-1']);
+  });
+
+  it('RN-08: solo ofrece los odontologos con la especialidad del tratamiento', async () => {
+    componente.formulario.patchValue({ tratamientoId: 'tra-1' });
+    await fixture.whenStable();
+
+    // Ana es de ortodoncia y el tercero esta de baja: queda Juan.
+    expect(componente.odontologosAptos().map((o) => o.id)).toEqual(['odo-1']);
+  });
+
+  it('RN-08: al cambiar de tratamiento suelta al odontologo que deja de valer', async () => {
+    componente.formulario.patchValue({ tratamientoId: 'tra-1', odontologoId: 'odo-1' });
+    await fixture.whenStable();
+    expect(componente.formulario.controls.odontologoId.value).toBe('odo-1');
+
+    // Sin tratamiento no hay especialidad exigida: nadie es apto.
+    componente.formulario.patchValue({ tratamientoId: '' });
+    await fixture.whenStable();
+
+    expect(componente.formulario.controls.odontologoId.value).toBe('');
+  });
+
+  it('omite odontologoId cuando se consulta «cualquier odontologo»', async () => {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      odontologoId: '',
+      desde: '2026-09-14',
+      hasta: '2026-09-14',
+    });
+    await fixture.whenStable();
+    componente.consultar();
+
+    const req = httpMock.expectOne((r) => r.url === API);
+    expect(req.request.params.get('tratamientoId')).toBe('tra-1');
+    expect(req.request.params.get('desde')).toBe('2026-09-14');
+    // Ausente, no vacio: el parametro vacio no significa «cualquiera».
+    expect(req.request.params.has('odontologoId')).toBe(false);
+    req.flush(RESPUESTA);
+  });
+
+  it('envia odontologoId cuando se elige uno concreto', async () => {
+    componente.formulario.patchValue({ tratamientoId: 'tra-1' });
+    await fixture.whenStable();
+    componente.formulario.patchValue({ odontologoId: 'odo-1' });
+    await fixture.whenStable();
+    componente.consultar();
+
+    const req = httpMock.expectOne((r) => r.url === API);
+    expect(req.request.params.get('odontologoId')).toBe('odo-1');
+    req.flush(RESPUESTA);
+  });
+
+  it('muestra las franjas agrupadas de treinta en treinta', async () => {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-14',
+      hasta: '2026-09-14',
+    });
+    await fixture.whenStable();
+    componente.consultar();
+    httpMock.expectOne((r) => r.url === API).flush(RESPUESTA);
+    await fixture.whenStable();
+
+    expect(componente.dias()[0].bloques.map((b) => b.inicio)).toEqual(['09:00', '09:30']);
+  });
+
+  it('pinta cada dia con sus franjas y quien las atiende', async () => {
+    // Las senales pueden estar bien y la plantilla no pintarlas: esta prueba
+    // mira el DOM, que es lo que ve el paciente.
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-14',
+      hasta: '2026-09-14',
+    });
+    await fixture.whenStable();
+    componente.consultar();
+    httpMock.expectOne((r) => r.url === API).flush(RESPUESTA);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    // 2026-09-14 es lunes. Que el encabezado lo diga en espanol es parte de la
+    // pantalla: el DatePipe usa el LOCALE_ID que la aplicacion configura.
+    // «setiembre» no es una errata: es la grafia de es-PE.
+    const encabezado = raiz.querySelector('.dia h2')?.textContent?.trim().toLowerCase();
+    expect(encabezado).toBe('lunes 14 de setiembre');
+
+    const horas = [...raiz.querySelectorAll('.franja .hora')].map((e) => e.textContent?.trim());
+    expect(horas).toEqual(['09:00', '09:30']);
+
+    // Un solo odontologo: se muestra su nombre, no un recuento.
+    const quien = [...raiz.querySelectorAll('.franja .quien')].map((e) => e.textContent?.trim());
+    expect(quien).toEqual(['Juan Pérez', 'Juan Pérez']);
+  });
+
+  it('avisa cuando el rango no tiene ninguna franja', async () => {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-14',
+      hasta: '2026-09-14',
+    });
+    await fixture.whenStable();
+    componente.consultar();
+    httpMock.expectOne((r) => r.url === API).flush({ ...RESPUESTA, odontologos: [] });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(raiz.querySelector('.vacio')?.textContent).toContain('No hay franjas disponibles');
+    expect(raiz.querySelectorAll('.franja')).toHaveLength(0);
+  });
+
+  it('el conmutador de quince minutos reexpande sin volver a pedir', async () => {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-14',
+      hasta: '2026-09-14',
+    });
+    await fixture.whenStable();
+    componente.consultar();
+    httpMock.expectOne((r) => r.url === API).flush(RESPUESTA);
+    await fixture.whenStable();
+
+    componente.paso.set(15);
+
+    expect(componente.dias()[0].bloques.map((b) => b.inicio)).toEqual(['09:00', '09:15', '09:30']);
+    // Agrupar es cliente: ninguna peticion nueva.
+    httpMock.verify();
+  });
+
+  it('RNF-01: un rango de mas de catorce dias no llega a salir', async () => {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-14',
+      hasta: '2026-09-28',
+    });
+    await fixture.whenStable();
+
+    expect(componente.formulario.hasError('rangoLargo')).toBe(true);
+    componente.consultar();
+
+    // El servidor tambien lo rechaza, pero el viaje se ahorra.
+    httpMock.verify();
+  });
+
+  it('un rango invertido tampoco sale', async () => {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-15',
+      hasta: '2026-09-14',
+    });
+    await fixture.whenStable();
+
+    expect(componente.formulario.hasError('rangoInvertido')).toBe(true);
+    componente.consultar();
+    httpMock.verify();
+  });
+
+  it('un rango de exactamente catorce dias es valido', async () => {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-14',
+      hasta: '2026-09-27',
+    });
+    await fixture.whenStable();
+
+    expect(componente.formulario.hasError('rangoLargo')).toBe(false);
+    expect(componente.formulario.invalid).toBe(false);
+  });
+
+  it('muestra el mensaje del servidor cuando la consulta falla', async () => {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-14',
+      hasta: '2026-09-14',
+    });
+    await fixture.whenStable();
+    componente.consultar();
+
+    httpMock
+      .expectOne((r) => r.url === API)
+      .flush({ message: 'Tratamiento no encontrado' }, { status: 404, statusText: 'Not Found' });
+    await fixture.whenStable();
+
+    expect(componente.error()).toBe('Tratamiento no encontrado');
+    expect(componente.dias()).toEqual([]);
+  });
+
+  // ------------------------------------------------------------------
+  // HU-09 · reserva desde la pantalla
+  // ------------------------------------------------------------------
+
+  async function consultarConResultado(): Promise<void> {
+    componente.formulario.patchValue({
+      tratamientoId: 'tra-1',
+      desde: '2026-09-14',
+      hasta: '2026-09-14',
+    });
+    await fixture.whenStable();
+    componente.consultar();
+    httpMock.expectOne((r) => r.url === API).flush(RESPUESTA);
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('para el PACIENTE la franja es un boton', async () => {
+    await consultarConResultado();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(componente.puedeReservar()).toBe(true);
+    expect(raiz.querySelectorAll('button.franja').length).toBeGreaterThan(0);
+    expect(raiz.querySelector('button.franja')?.getAttribute('aria-label')).toContain('Reservar');
+  });
+
+  it('para el ODONTOLOGO la franja es informacion, no un boton', async () => {
+    // Reservar en nombre de otro es HU-14: un boton que devolviera 403 al
+    // pulsarlo seria un fallo de diseno, no una barrera.
+    await montarComo('ODONTOLOGO');
+    await consultarConResultado();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(componente.puedeReservar()).toBe(false);
+    expect(raiz.querySelectorAll('button.franja')).toHaveLength(0);
+    expect(raiz.querySelectorAll('.franja').length).toBeGreaterThan(0);
+  });
+
+  it('tras reservar deja el codigo a la vista y repite la consulta', async () => {
+    await consultarConResultado();
+
+    componente.abrirReserva(componente.dias()[0], componente.dias()[0].bloques[0]);
+    await fixture.whenStable();
+
+    // La franja tomada no puede seguir ofreciendose: se vuelve a preguntar.
+    httpMock.expectOne((r) => r.url === API).flush({ ...RESPUESTA, odontologos: [] });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(componente.ultimaReserva()?.codigo).toBe('CIT-000123');
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(raiz.querySelector('.reservada')?.textContent).toContain('CIT-000123');
+    // Se abrieron los dos dialogos: la confirmacion y el comprobante.
+    expect(abiertos).toHaveLength(2);
+  });
+
+  it('HU-10: el 409 avisa y recalcula la disponibilidad (RF-16)', async () => {
+    // La otra mitad del criterio: `reservar-dialogo.spec.ts` comprueba que el
+    // 409 cierra el dialogo pidiendo recargar; aqui se comprueba que la
+    // pantalla obedece, porque RF-16 exige «informando y recalculando».
+    const aviso = 'Esa franja ya no esta disponible. Vuelve a consultar la disponibilidad.';
+    await montarComo('PACIENTE', { recargar: aviso });
+    await consultarConResultado();
+
+    const abrirAviso = vi.spyOn(TestBed.inject(MatSnackBar), 'open');
+
+    componente.abrirReserva(componente.dias()[0], componente.dias()[0].bloques[0]);
+    await fixture.whenStable();
+
+    expect(abrirAviso).toHaveBeenCalledWith(aviso, 'Cerrar', { duration: 8000 });
+
+    // Recalcular no es opcional: la lista que el paciente tiene delante ya no
+    // vale, y esta vez el motor ya no ofrece la franja.
+    httpMock.expectOne((r) => r.url === API).flush({ ...RESPUESTA, odontologos: [] });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(componente.dias()).toEqual([]);
+    // No hubo cita: ni comprobante ni codigo a la vista.
+    expect(componente.ultimaReserva()).toBeNull();
+    expect(abiertos).toHaveLength(1);
+  });
+
+  it('si se cancela el dialogo no se reserva ni se recarga', async () => {
+    await montarComo('PACIENTE', null);
+    await consultarConResultado();
+
+    componente.abrirReserva(componente.dias()[0], componente.dias()[0].bloques[0]);
+    await fixture.whenStable();
+
+    expect(componente.ultimaReserva()).toBeNull();
+    expect(abiertos).toHaveLength(1);
+    httpMock.verify();
+  });
+});
