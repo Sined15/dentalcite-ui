@@ -9,6 +9,8 @@ const AGENDA = ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'] as const;
 // suyas—. Que el odontologo vea las propias es parte de RF-18, pero con la
 // comprobacion de propiedad que HU-15 traera.
 const RECEPCION = ['RECEPCIONISTA', 'ADMINISTRADOR'] as const;
+// RF-07 da la busqueda de pacientes al «personal»: los tres roles que atienden.
+const PERSONAL = ['RECEPCIONISTA', 'ADMINISTRADOR', 'ODONTOLOGO'] as const;
 const HORARIOS = ['ODONTOLOGO', 'ADMINISTRADOR'] as const;
 const ADMIN = ['ADMINISTRADOR'] as const;
 
@@ -152,14 +154,32 @@ export const routes: Routes = [
         loadComponent: () => import('./components/cita/agenda').then((m) => m.Agenda),
       },
 
-      // HU-12: el alta presencial del paciente. HU-13 anadira /pacientes con la
-      // busqueda, y entonces esta pasara a colgar de aquel listado.
+      // HU-13 · RF-07: la busqueda es del personal.
+      {
+        path: 'pacientes',
+        canActivate: [rolGuard],
+        data: { roles: PERSONAL },
+        loadComponent: () =>
+          import('./components/paciente/paciente-list').then((m) => m.PacienteList),
+      },
+      // HU-12: el alta presencial. Va **antes** que 'pacientes/:id' para que
+      // «nuevo» no se lea como un identificador de ficha.
       {
         path: 'pacientes/nuevo',
         canActivate: [rolGuard],
         data: { roles: RECEPCION },
         loadComponent: () =>
           import('./components/paciente/paciente-edit/paciente-edit').then((m) => m.PacienteEdit),
+      },
+      // HU-13 · RF-08: la ficha la alcanzan los cuatro roles, pero no sobre
+      // cualquiera. Quien puede ver cual lo decide el servidor con un 403: aqui
+      // no se puede saber si esta ficha es «la propia» o «un paciente mio».
+      {
+        path: 'pacientes/:id',
+        canActivate: [rolGuard],
+        data: { roles: TODOS },
+        loadComponent: () =>
+          import('./components/paciente/paciente-ficha/paciente-ficha').then((m) => m.PacienteFicha),
       },
 
       {

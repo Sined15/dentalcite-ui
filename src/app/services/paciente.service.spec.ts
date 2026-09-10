@@ -51,4 +51,40 @@ describe('PacienteService', () => {
     expect(cuerpo['correo']).toBeUndefined();
     expect(cuerpo['password']).toBeUndefined();
   });
+
+  it('HU-13: la busqueda manda el termino y la pagina del servidor', () => {
+    servicio.buscar('  Huaman  ', { page: 2, size: 50 }).subscribe();
+
+    const req = httpMock.expectOne((r) => r.url === PACIENTES && r.method === 'GET');
+    expect(req.request.params.get('q')).toBe('Huaman');
+    expect(req.request.params.get('page')).toBe('2');
+    expect(req.request.params.get('size')).toBe('50');
+  });
+
+  /** Para el servidor un parametro vacio no significa «todos». */
+  it('HU-13: el termino en blanco viaja ausente, no vacio', () => {
+    servicio.buscar('   ').subscribe();
+
+    const req = httpMock.expectOne((r) => r.url === PACIENTES && r.method === 'GET');
+    expect(req.request.params.has('q')).toBe(false);
+  });
+
+  /**
+   * Es un PUT, no un PATCH: el servidor reemplaza lo editable, de modo que un
+   * telefono ausente borra el que hubiera. Y nunca manda documento, porque RN-10
+   * lo declara la identidad del paciente.
+   */
+  it('HU-13: la correccion de la ficha es un PUT sin documento', () => {
+    servicio
+      .actualizar('fic-1', { nombres: 'Rosa', apellidos: 'Huaman', alergias: 'Penicilina' })
+      .subscribe();
+
+    const req = httpMock.expectOne(`${PACIENTES}/fic-1`);
+    expect(req.request.method).toBe('PUT');
+
+    const cuerpo = req.request.body as Record<string, unknown>;
+    expect(cuerpo['alergias']).toBe('Penicilina');
+    expect(cuerpo['documento']).toBeUndefined();
+    expect(cuerpo['tipoDocumento']).toBeUndefined();
+  });
 });

@@ -1,3 +1,4 @@
+import { CitaResumen } from './cita.model';
 import { TipoDocumento } from './comun.model';
 
 /** Respuesta de `PacienteResponseDTO`. La entidad del servidor es `Ficha`. */
@@ -11,6 +12,32 @@ export interface Paciente {
   telefono: string | null;
   /** Si la persona tiene ademas cuenta de acceso. El alta presencial la crea sin ella. */
   tieneCuenta: boolean;
+}
+
+/**
+ * Respuesta de `PacienteDetalleDTO` (HU-13 · RF-08): la ficha completa.
+ *
+ * Las citas vienen en una sola lista, de la mas reciente a la mas antigua;
+ * agruparlas en pasadas y futuras es cosa de la pantalla. Cada fila repite el
+ * paciente porque reutiliza el DTO de la agenda.
+ */
+export interface PacienteDetalle extends Paciente {
+  alergias: string | null;
+  citas: CitaResumen[];
+}
+
+/**
+ * Cuerpo de `PUT /api/v1/pacientes/{id}`. Es un reemplazo total de lo editable:
+ * omitir `telefono` lo borra, que es como se corrige uno equivocado.
+ *
+ * **No lleva documento**: RN-10 lo declara la identidad del paciente, y el
+ * servidor no lo lee aunque se mande.
+ */
+export interface PacienteUpdateRequest {
+  nombres: string;
+  apellidos: string;
+  telefono?: string;
+  alergias?: string;
 }
 
 /**

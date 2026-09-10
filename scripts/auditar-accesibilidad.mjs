@@ -62,8 +62,24 @@ const PANTALLAS = [
   ['PACIENTE', '/disponibilidad'],
   ['RECEPCIONISTA', '/citas'],
   // Sprint 3
+  ['RECEPCIONISTA', '/pacientes'],
   ['RECEPCIONISTA', '/pacientes/nuevo'],
 ];
+
+/**
+ * La ficha de HU-13 necesita un identificador concreto, asi que su ruta no se
+ * puede escribir en la lista de arriba: se resuelve buscando un paciente con la
+ * propia API antes de auditar.
+ */
+async function pantallaDeFicha(tokenDeRecepcion) {
+  const r = await fetch(`${API}/api/v1/pacientes?size=1`, {
+    headers: { Authorization: `Bearer ${tokenDeRecepcion}` },
+  });
+  if (!r.ok) return null;
+  const pagina = await r.json();
+  const paciente = pagina.content?.[0];
+  return paciente ? ['RECEPCIONISTA', `/pacientes/${paciente.id}`] : null;
+}
 
 /** RNF-09 fija 360px como ancho mínimo; se audita ahí y en escritorio. */
 const ANCHOS = [
@@ -166,6 +182,13 @@ try {
   const tokens = {};
   for (const rol of new Set(PANTALLAS.map(([r]) => r).filter(Boolean))) {
     tokens[rol] = await token(rol);
+  }
+
+  const ficha = await pantallaDeFicha(tokens.RECEPCIONISTA);
+  if (ficha) {
+    PANTALLAS.push(ficha);
+  } else {
+    console.log('AVISO  no hay pacientes que auditar: se omite /pacientes/{id}');
   }
 
   const informe = [];
