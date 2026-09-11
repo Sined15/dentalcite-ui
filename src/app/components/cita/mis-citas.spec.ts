@@ -9,63 +9,16 @@ import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { environment } from '../../../environments/environment';
-import { PageResponse } from '../../core/http/api.types';
 import { CitaResumen } from '../../models';
+import { cita, pagina } from './citas.testing';
 import { MisCitas } from './mis-citas';
 
 const API = `${environment.apiUrl}/api/v1/citas/mias`;
 
 registerLocaleData(localeEsPe);
 
-/** "YYYY-MM-DD" de hoy más `dias`, en hora local y sin pasar por UTC. */
-function fechaLocal(dias: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + dias);
-  const mes = String(d.getMonth() + 1).padStart(2, '0');
-  const dia = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mes}-${dia}`;
-}
-
-function cita(
-  id: string,
-  dias: number,
-  estado: CitaResumen['estado'] = 'CONFIRMADA',
-  cancelable = true,
-): CitaResumen {
-  return {
-    id,
-    codigo: `CIT-00000${id.slice(-1)}`,
-    fecha: fechaLocal(dias),
-    hora: '09:00:00',
-    duracionMinutos: 30,
-    zonaHoraria: 'America/Lima',
-    estado,
-    motivoCancelacion: estado === 'CANCELADA' ? 'Ya no podia asistir' : null,
-    cancelablePorPaciente: cancelable,
-    paciente: { fichaId: 'fic-1', nombre: 'Ana Torres', numeroHistoria: 'HC-00042' },
-    odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
-    tratamiento: { id: 'tra-1', nombre: 'Endodoncia' },
-    consultorio: { id: 'con-1', nombre: 'Consultorio 2' },
-  };
-}
-
-function pagina(content: CitaResumen[]): PageResponse<CitaResumen> {
-  return {
-    content,
-    totalElements: content.length,
-    totalPages: 1,
-    number: 0,
-    size: 100,
-    first: true,
-    last: true,
-    numberOfElements: content.length,
-    empty: content.length === 0,
-  };
-}
-
 interface Interno {
   futuras: () => CitaResumen[];
-  pasadas: () => CitaResumen[];
   cancelar: (c: CitaResumen) => void;
   etiquetaEstado: (estado: string) => string;
 }
@@ -111,8 +64,9 @@ describe('MisCitas', () => {
   beforeEach(() => TestBed.resetTestingModule());
 
   it('no manda la ficha ni el rango: el servidor saca la ficha del token', async () => {
-    // El criterio pide «las futuras y las pasadas», asi que no hay rango que
-    // mandar; y mandar la ficha permitiria pedir las de otro.
+    // Sin rango aunque aqui solo se pinten las proximas: `desde` es por dia y
+    // habria que descartar igualmente las de esta misma mañana. Y mandar la
+    // ficha permitiria pedir las de otro.
     TestBed.configureTestingModule({
       imports: [MisCitas],
       providers: [
@@ -135,11 +89,13 @@ describe('MisCitas', () => {
     req.flush(pagina([]));
   });
 
-  it('separa las futuras de las pasadas', async () => {
+  it('solo pinta las proximas: las pasadas son del historial', async () => {
     await montar([cita('c-1', 7), cita('c-2', -30, 'ATENDIDA', false)]);
 
     expect(componente.futuras().map((c) => c.id)).toEqual(['c-1']);
-    expect(componente.pasadas().map((c) => c.id)).toEqual(['c-2']);
+    // Ni en la lista ni en la pantalla: aqui es donde se cancela, y una cita de
+    // hace un mes solo enterraria las que todavia se pueden tocar.
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('CIT-000002');
   });
 
   it('ordena las proximas de la mas cercana a la mas lejana', async () => {

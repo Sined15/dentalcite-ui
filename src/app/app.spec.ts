@@ -141,3 +141,179 @@ describe('App · cajon de navegacion adaptable', () => {
     expect(componente()['cajonAbierto']()).toBe(false);
   });
 });
+
+/**
+ * HU-06 (v4) · El area publica no lleva shell, ni siquiera con sesion abierta.
+ *
+ * Se comprueba con sesion a proposito: sin token el shell nunca aparece, asi que
+ * una prueba sin sesion pasaria diga lo que diga `esRutaPublica`. El caso que de
+ * verdad distingue es el del usuario identificado que navega al catalogo
+ * publico: si el shell lo envolviera, la pagina saldria con dos cabeceras
+ * superpuestas, la del portal y la publica.
+ */
+describe('App · el area publica no se envuelve con el shell', () => {
+  function montar(): ComponentFixture<App> {
+    localStorage.setItem('dentalcite.token', sesion('PACIENTE'));
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([
+          { path: 'perfil', children: [] },
+          { path: 'nuestras-especialidades', children: [] },
+          { path: 'nuestro-equipo', children: [] },
+          { path: '', children: [] },
+          { path: '**', children: [] },
+        ]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: BreakpointObserver, useValue: new BreakpointObserverFalso() },
+      ],
+    });
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function muestraShell(fixture: ComponentFixture<App>): boolean {
+    return (fixture.componentInstance as unknown as Record<string, () => boolean>)['mostrarShell']();
+  }
+
+  afterEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('con sesion abierta, las rutas publicas no llevan shell', async () => {
+    const fixture = montar();
+    const router = TestBed.inject(Router);
+
+    for (const ruta of ['/', '/nuestras-especialidades', '/nuestro-equipo']) {
+      await router.navigateByUrl(ruta);
+      TestBed.tick();
+      expect(muestraShell(fixture), `${ruta} no debe llevar shell`).toBe(false);
+    }
+  });
+
+  it('la raiz se compara exacta: una ruta del portal si lleva shell', async () => {
+    // `'/'` con `startsWith` casaria con todas las rutas y dejaria el portal
+    // entero sin cajon de navegacion.
+    const fixture = montar();
+
+    await TestBed.inject(Router).navigateByUrl('/perfil');
+    TestBed.tick();
+
+    expect(muestraShell(fixture)).toBe(true);
+  });
+});
+
+/**
+ * El menu del paciente: un grupo «Citas» que se despliega y una entrada propia
+ * de tratamientos.
+ *
+ * Lo que se fija aqui no es el aspecto del desplegable, sino las dos decisiones
+ * que lo gobiernan: quien ve cada entrada —la misma tabla de roles que aplican
+ * los guards— y cuando un grupo aparece abierto.
+ */
+describe('App · menu del paciente', () => {
+  /**
+   * Se entra por una ruta del portal y no por la raiz: `/` es publica desde la
+   * revision v4, y ahi el shell —con su cajon y su menu— no se pinta.
+   */
+  async function montarEn(rol: string, ruta: string): Promise<ComponentFixture<App>> {
+    const fixture = montar(rol);
+    await TestBed.inject(Router).navigateByUrl(ruta);
+    TestBed.tick();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function montar(rol: string): ComponentFixture<App> {
+    localStorage.setItem('dentalcite.token', sesion(rol));
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([
+          { path: 'mis-citas', children: [] },
+          { path: 'mis-citas/historial', children: [] },
+          { path: 'mis-tratamientos', children: [] },
+          { path: 'bloqueos', children: [] },
+          { path: '**', children: [] },
+        ]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: BreakpointObserver, useValue: new BreakpointObserverFalso() },
+      ],
+    });
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function etiquetas(fixture: ComponentFixture<App>): string[] {
+    const entradas = (fixture.componentInstance as unknown as Record<string, () => unknown>)[
+      'entradas'
+    ]() as { etiqueta: string }[];
+    return entradas.map((e) => e.etiqueta);
+  }
+
+  function cabeceraDeGrupo(fixture: ComponentFixture<App>): HTMLElement | null {
+    return (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('button.grupo');
+  }
+
+  afterEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('el paciente ve el grupo Citas y la entrada Tratamientos', () => {
+    const fixture = montar('PACIENTE');
+
+    expect(etiquetas(fixture)).toContain('Citas');
+    expect(etiquetas(fixture)).toContain('Tratamientos');
+    // «Mis citas» ya no es una entrada suelta: cuelga del grupo.
+    expect(etiquetas(fixture)).not.toContain('Mis citas');
+  });
+
+  it('los demas roles no ven ni el grupo ni Tratamientos', async () => {
+    // La entrada se oculta porque el guard responderia que no; verlas y que al
+    // pulsarlas mandaran a /sin-permiso seria un fallo de diseno.
+    const fixture = await montarEn('ODONTOLOGO', '/bloqueos');
+
+    expect(etiquetas(fixture)).not.toContain('Citas');
+    expect(etiquetas(fixture)).not.toContain('Tratamientos');
+    expect(cabeceraDeGrupo(fixture)).toBeNull();
+  });
+
+  it('el grupo arranca cerrado y sus hijos no estan en el DOM', async () => {
+    // Plegado tiene que ser fuera del DOM: oculto con CSS seguiria en el
+    // recorrido del tabulador.
+    const fixture = await montarEn('PACIENTE', '/mis-tratamientos');
+
+    expect(cabeceraDeGrupo(fixture)?.getAttribute('aria-expanded')).toBe('false');
+    expect((fixture.nativeElement as HTMLElement).querySelectorAll('a.hijo')).toHaveLength(0);
+  });
+
+  it('al pulsar el grupo se despliegan sus hijos', async () => {
+    const fixture = await montarEn('PACIENTE', '/mis-tratamientos');
+
+    cabeceraDeGrupo(fixture)?.click();
+    fixture.detectChanges();
+
+    expect(cabeceraDeGrupo(fixture)?.getAttribute('aria-expanded')).toBe('true');
+    const hijos = (fixture.nativeElement as HTMLElement).querySelectorAll('a.hijo');
+    expect([...hijos].map((h) => h.textContent?.trim())).toEqual(['Mis citas', 'Historial']);
+  });
+
+  it('al entrar directo al historial el grupo aparece abierto', async () => {
+    // Por recarga o por un enlace: el menu plegado contradiria a la pantalla.
+    const fixture = montar('PACIENTE');
+
+    await TestBed.inject(Router).navigateByUrl('/mis-citas/historial');
+    TestBed.tick();
+    fixture.detectChanges();
+
+    expect(cabeceraDeGrupo(fixture)?.getAttribute('aria-expanded')).toBe('true');
+  });
+});

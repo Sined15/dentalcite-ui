@@ -49,12 +49,30 @@ function conSesion(token: string | null): void {
   TestBed.configureTestingModule({ providers: [provideRouter([])] });
 }
 
+/** Devuelve el veredicto crudo del guard: `true` o el arbol de redireccion. */
+function veredicto(
+  guard: typeof rolGuard | typeof passwordGuard,
+  roles?: string[],
+  url = '/destino',
+): boolean | UrlTree {
+  const ruta = { data: roles ? { roles } : {} } as unknown as ActivatedRouteSnapshot;
+  const estado = { url } as RouterStateSnapshot;
+  return TestBed.runInInjectionContext(() => guard(ruta, estado)) as boolean | UrlTree;
+}
+
 /** Devuelve 'true' si el guard deja pasar, o la ruta de redireccion. */
 function resultado(guard: typeof rolGuard | typeof passwordGuard, roles?: string[]): string {
-  const ruta = { data: roles ? { roles } : {} } as unknown as ActivatedRouteSnapshot;
-  const estado = { url: '/destino' } as RouterStateSnapshot;
-  const r = TestBed.runInInjectionContext(() => guard(ruta, estado)) as boolean | UrlTree;
+  const r = veredicto(guard, roles);
   return r instanceof UrlTree ? r.toString() : String(r);
+}
+
+/**
+ * El `returnUrl` tal como queda en el arbol, sin pasar por `toString()`: asi la
+ * prueba dice que el destino se conserva, y no como Angular escapa las barras.
+ */
+function returnUrlDe(guard: typeof rolGuard | typeof passwordGuard, url: string): unknown {
+  const r = veredicto(guard, ['ADMINISTRADOR'], url);
+  return r instanceof UrlTree ? r.queryParams['returnUrl'] : null;
 }
 
 afterEach(() => localStorage.clear());
@@ -62,7 +80,7 @@ afterEach(() => localStorage.clear());
 describe('rolGuard', () => {
   it('manda al login cuando no hay sesion', () => {
     conSesion(null);
-    expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/login');
+    expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/login?returnUrl=%2Fdestino');
   });
 
   it('deja pasar cuando el rol esta entre los permitidos', () => {
@@ -88,12 +106,29 @@ describe('rolGuard', () => {
 
   it('trata un token caducado como ausencia de sesion', () => {
     conSesion(tokenCon({ rol: 'ADMINISTRADOR', exp: Math.floor(Date.now() / 1000) - 60 }));
-    expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/login');
+    expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/login?returnUrl=%2Fdestino');
   });
 
   it('trata un token ilegible como ausencia de sesion', () => {
     conSesion('esto-no-es-un-jwt');
-    expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/login');
+    expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/login?returnUrl=%2Fdestino');
+  });
+
+  /**
+   * HU-06 (v4): el visitante que pulsa «pedir cita» en el catalogo publico pedia
+   * una franja concreta. Sin esto, el login lo dejaria en la portada de su rol y
+   * tendria que rehacer el camino a mano.
+   */
+  it('conserva la query del destino dentro de returnUrl', () => {
+    conSesion(null);
+    expect(returnUrlDe(rolGuard, '/disponibilidad?tratamientoId=tra-1')).toBe(
+      '/disponibilidad?tratamientoId=tra-1',
+    );
+  });
+
+  it('no lleva returnUrl a /sin-permiso: ahi la sesion existe', () => {
+    conSesion(sesion('PACIENTE'));
+    expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/sin-permiso');
   });
 });
 
@@ -110,7 +145,19 @@ describe('passwordGuard', () => {
 
   it('manda al login cuando no hay sesion', () => {
     conSesion(null);
-    expect(resultado(passwordGuard)).toBe('/login');
+    expect(resultado(passwordGuard)).toBe('/login?returnUrl=%2Fdestino');
+  });
+
+  it('conserva la query del destino dentro de returnUrl', () => {
+    conSesion(null);
+    expect(returnUrlDe(passwordGuard, '/disponibilidad?tratamientoId=tra-1')).toBe(
+      '/disponibilidad?tratamientoId=tra-1',
+    );
+  });
+
+  it('no lleva returnUrl al cambio de contraseña: ahi la sesion existe', () => {
+    conSesion(sesion('ODONTOLOGO', true));
+    expect(resultado(passwordGuard)).toBe('/cambiar-password');
   });
 });
 

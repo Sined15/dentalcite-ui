@@ -19,7 +19,7 @@ import { EspecialidadList } from './especialidad-list';
 const API = `${environment.apiUrl}/api/v1/especialidades`;
 
 function especialidad(nombre: string, i: number): Especialidad {
-  return { id: `esp-${i}`, nombre, descripcion: null, activo: true };
+  return { id: `esp-${i}`, nombre, descripcion: null, activo: true, imagenUrl: null };
 }
 
 /** 25 especialidades: mas de una pagina del servidor, que sirve 20 por defecto. */

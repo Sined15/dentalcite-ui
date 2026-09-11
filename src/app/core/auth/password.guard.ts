@@ -10,12 +10,16 @@ import { AuthService } from './auth.service';
  *
  * Se aplica en la ruta padre protegida, de modo que no hay URL que lo esquive.
  */
-export const passwordGuard: CanActivateFn = () => {
+export const passwordGuard: CanActivateFn = (_ruta, state) => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
   if (!auth.estaAutenticado()) {
-    return router.createUrlTree(['/login']);
+    // Mismo `returnUrl` que `rolGuard`, y por lo mismo: sin sesion el usuario
+    // pedia una pantalla concreta y hay que devolverselo tras el login. La rama
+    // de abajo no lo lleva: ahi la sesion existe y el cambio de contraseña es
+    // obligatorio, asi que no hay destino que conservar.
+    return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
   }
 
   return auth.requiereCambioPassword() ? router.createUrlTree(['/cambiar-password']) : true;

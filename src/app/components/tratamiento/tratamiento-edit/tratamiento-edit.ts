@@ -83,6 +83,17 @@ const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors |
             <textarea matInput rows="3" formControlName="descripcion"></textarea>
           </mat-form-field>
 
+          <!--
+            RF-09 y RF-10 (v4): ruta de la imagen del catalogo publico. No es una
+            subida: las de demostracion viajan con este cliente, en
+            public/img/catalogo/.
+          -->
+          <mat-form-field appearance="outline">
+            <mat-label>Imagen (opcional)</mat-label>
+            <input matInput formControlName="imagenUrl" placeholder="/img/catalogo/ejemplo.svg" />
+            <mat-hint>Ruta o URL de la imagen que se ve en las paginas publicas</mat-hint>
+          </mat-form-field>
+
           <div class="fila">
             <mat-form-field appearance="outline">
               <mat-label>Duración en minutos</mat-label>
@@ -204,6 +215,7 @@ export class TratamientoEdit {
       ],
     ],
     especialidadId: ['', [Validators.required]],
+    imagenUrl: [''],
   });
 
   constructor() {
@@ -255,6 +267,7 @@ export class TratamientoEdit {
       descripcion: fila.descripcion ?? '',
       duracionMinutos: fila.duracionMinutos,
       especialidadId: fila.especialidad?.id ?? '',
+      imagenUrl: fila.imagenUrl ?? '',
     });
   }
 
@@ -272,6 +285,8 @@ export class TratamientoEdit {
       descripcion: valores.descripcion || undefined,
       duracionMinutos: valores.duracionMinutos,
       especialidadId: valores.especialidadId,
+      // PUT reemplaza el recurso entero: omitir la imagen la borraria.
+      imagenUrl: valores.imagenUrl || undefined,
     };
 
     const peticion = this.id

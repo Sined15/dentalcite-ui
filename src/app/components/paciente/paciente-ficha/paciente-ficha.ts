@@ -6,17 +6,25 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatDialog } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { mensajeDeError } from '../../../core/http/api-error';
-import { CitaResumen, PacienteDetalle } from '../../../models';
+import { CitaResumen, PacienteDetalle, Plan } from '../../../models';
 import { PacienteService } from '../../../services/paciente.service';
+import { PlanService } from '../../../services/plan.service';
+import { PlanEdit, PlanEditDatos } from '../../plan/plan-edit';
+import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-plan-dialogo';
 
 /**
  * HU-13 · RF-08: «la ficha con datos, alergias y citas pasadas y futuras, y
  * editar los datos de contacto».
+ *
+ * Desde HU-17 muestra además los planes de tratamiento del paciente (RF-23), que
+ * es donde el odontólogo decide planificar: aquí ya tiene delante sus alergias y
+ * su historial de citas.
  *
  * El formulario de edición solo se pinta para RECEPCIONISTA y ADMINISTRADOR,
  * que son quienes RF-08 autoriza. Ocultarlo no es la defensa —esa es el 403 del
@@ -156,6 +164,68 @@ import { PacienteService } from '../../../services/paciente.service';
             }
           </mat-card-content>
         </mat-card>
+
+        <!--
+          HU-17 · RF-23. Solo la ven quienes pueden planificar: al paciente y a
+          recepcion el servidor les responde 403, asi que pintarles una seccion
+          vacia seria prometer algo que no pueden abrir.
+        -->
+        @if (puedePlanificar()) {
+          <mat-card class="tarjeta">
+            <mat-card-header>
+              <mat-card-title>Planes de tratamiento</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              @if (errorPlanes(); as mensaje) {
+                <p class="error" role="alert">{{ mensaje }}</p>
+              }
+
+              @if (planes().length === 0) {
+                <p class="vacio">No tiene ningún plan de tratamiento.</p>
+              } @else {
+                <ul class="planes">
+                  @for (plan of planes(); track plan.id) {
+                    <li [class.suspendido]="!plan.activo">
+                      <div class="plan-datos">
+                        <strong>{{ plan.tratamiento.nombre }}</strong>
+                        <span>
+                          {{ plan.sesionesPrevistas }}
+                          {{ plan.sesionesPrevistas === 1 ? 'sesión prevista' : 'sesiones previstas' }}
+                          · {{ plan.odontologo.nombre }}
+                        </span>
+                        <span class="estado">
+                          {{ plan.activo ? 'Activo' : 'Suspendido' }}
+                        </span>
+                        @if (plan.motivoSuspension) {
+                          <span class="estado">Motivo: {{ plan.motivoSuspension }}</span>
+                        }
+                      </div>
+
+                      @if (plan.activo) {
+                        <button
+                          mat-stroked-button
+                          type="button"
+                          color="warn"
+                          (click)="suspenderPlan(plan)"
+                          [attr.aria-label]="'Suspender el plan de ' + plan.tratamiento.nombre"
+                        >
+                          Suspender
+                        </button>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+
+              <div class="acciones">
+                <button mat-flat-button color="primary" type="button" (click)="nuevoPlan(p)">
+                  <mat-icon>assignment_add</mat-icon>
+                  Nuevo plan
+                </button>
+              </div>
+            </mat-card-content>
+          </mat-card>
+        }
       </div>
     }
   `,
@@ -228,6 +298,42 @@ import { PacienteService } from '../../../services/paciente.service';
       font-size: 0.8125rem;
       color: var(--mat-sys-on-surface-variant, #49454f);
     }
+    .planes {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .planes li {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--mat-sys-outline-variant, #cac4d0);
+    }
+    .plan-datos {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .plan-datos span {
+      font-size: 0.875rem;
+    }
+    .suspendido strong {
+      text-decoration: line-through;
+    }
+
+    /* RNF-09: a 360px el boton baja bajo los datos en vez de estrujarlos. */
+    @media (max-width: 480px) {
+      .planes li {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .planes li button {
+        width: 100%;
+      }
+    }
     .error {
       color: var(--mat-sys-error, #b3261e);
     }
@@ -239,10 +345,14 @@ export class PacienteFicha {
   private readonly ruta = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly planService = inject(PlanService);
+  private readonly dialogo = inject(MatDialog);
 
   private readonly id = this.ruta.snapshot.paramMap.get('id') ?? '';
 
   protected readonly ficha = signal<PacienteDetalle | null>(null);
+  protected readonly planes = signal<Plan[]>([]);
+  protected readonly errorPlanes = signal<string | null>(null);
   protected readonly cargando = signal(false);
   protected readonly guardando = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -272,8 +382,74 @@ export class PacienteFicha {
     return this.puedeEditar();
   }
 
+  /** HU-17 · RF-23: planificar es del odontólogo y del administrador. */
+  protected puedePlanificar(): boolean {
+    const rol = this.auth.rol();
+    return rol === 'ODONTOLOGO' || rol === 'ADMINISTRADOR';
+  }
+
+  protected nuevoPlan(paciente: PacienteDetalle): void {
+    const datos: PlanEditDatos = {
+      pacienteId: paciente.id,
+      pacienteNombre: `${paciente.apellidos ?? ''}, ${paciente.nombres ?? ''}`.trim(),
+    };
+    this.dialogo
+      .open(PlanEdit, { data: datos })
+      .afterClosed()
+      .subscribe((plan: Plan | null | undefined) => {
+        if (!plan) {
+          return;
+        }
+        this.snackBar.open(
+          `Plan de ${plan.tratamiento.nombre} creado con ${plan.sesionesPrevistas} sesiones.`,
+          'Cerrar',
+          { duration: 6000 },
+        );
+        this.cargarPlanes();
+      });
+  }
+
+  protected suspenderPlan(plan: Plan): void {
+    const datos: SuspenderPlanDatos = { plan };
+    this.dialogo
+      .open(SuspenderPlanDialogo, { data: datos })
+      .afterClosed()
+      .subscribe((suspendido: Plan | null | undefined) => {
+        if (!suspendido) {
+          return;
+        }
+        this.snackBar.open(
+          `Plan suspendido. ${plan.tratamiento.nombre} vuelve a poder planificarse.`,
+          'Cerrar',
+          { duration: 6000 },
+        );
+        this.cargarPlanes();
+      });
+  }
+
+  /**
+   * Los planes van en su propia consulta y no dentro de la ficha: la ficha es de
+   * HU-13 y la ven los cuatro roles, mientras que los planes solo los alcanzan
+   * quienes pueden planificar. Meterlos en el mismo cuerpo obligaría a vaciarlos
+   * según quién mire.
+   */
+  private cargarPlanes(): void {
+    if (!this.puedePlanificar()) {
+      return;
+    }
+    this.errorPlanes.set(null);
+    this.planService.deFicha(this.id).subscribe({
+      next: (planes) => this.planes.set(planes),
+      error: (err: unknown) => {
+        this.planes.set([]);
+        this.errorPlanes.set(mensajeDeError(err));
+      },
+    });
+  }
+
   constructor() {
     this.cargar();
+    this.cargarPlanes();
   }
 
   protected guardar(): void {

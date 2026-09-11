@@ -10,3 +10,5 @@ export * from './consultorio.model';
 export * from './disponibilidad.model';
 export * from './cita.model';
 export * from './paciente.model';
+export * from './plan.model';
+export * from './publico.model';

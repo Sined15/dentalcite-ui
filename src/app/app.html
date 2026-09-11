@@ -12,17 +12,66 @@
         <span>DentalCite</span>
       </div>
       <mat-nav-list>
-        @for (entrada of entradas(); track entrada.ruta) {
-          <a
-            mat-list-item
-            [routerLink]="entrada.ruta"
-            routerLinkActive
-            #enlace="routerLinkActive"
-            [activated]="enlace.isActive"
-          >
-            <mat-icon matListItemIcon aria-hidden="true">{{ entrada.icono }}</mat-icon>
-            <span matListItemTitle>{{ entrada.etiqueta }}</span>
-          </a>
+        @for (entrada of entradas(); track entrada.etiqueta) {
+          @if (entrada.hijos; as hijos) {
+            <!--
+              Un boton de verdad y no un enlace con destino falso: Enter, Espacio
+              y el foco visible vienen dados, que es lo que miran los criterios
+              2.1.1 y 2.4.7 de RNF-08.
+            -->
+            <button
+              mat-list-item
+              type="button"
+              class="grupo"
+              [class.grupo-activo]="grupoActivo(entrada)"
+              [attr.aria-expanded]="estaAbierto(entrada)"
+              [attr.aria-controls]="'grupo-' + entrada.etiqueta"
+              (click)="alternarGrupo(entrada)"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ entrada.icono }}</mat-icon>
+              <span matListItemTitle>{{ entrada.etiqueta }}</span>
+              <mat-icon matListItemMeta aria-hidden="true">
+                {{ estaAbierto(entrada) ? 'expand_less' : 'expand_more' }}
+              </mat-icon>
+            </button>
+
+            <!--
+              Plegado es fuera del DOM, no oculto con CSS: asi los hijos tampoco
+              estan en el recorrido del tabulador mientras no se ven.
+            -->
+            @if (estaAbierto(entrada)) {
+              <div
+                [id]="'grupo-' + entrada.etiqueta"
+                role="group"
+                [attr.aria-label]="entrada.etiqueta"
+              >
+                @for (hijo of hijos; track hijo.ruta) {
+                  <a
+                    mat-list-item
+                    class="hijo"
+                    [routerLink]="hijo.ruta"
+                    routerLinkActive
+                    [routerLinkActiveOptions]="{ exact: true }"
+                    #enlaceHijo="routerLinkActive"
+                    [activated]="enlaceHijo.isActive"
+                  >
+                    <span matListItemTitle>{{ hijo.etiqueta }}</span>
+                  </a>
+                }
+              </div>
+            }
+          } @else {
+            <a
+              mat-list-item
+              [routerLink]="entrada.ruta"
+              routerLinkActive
+              #enlace="routerLinkActive"
+              [activated]="enlace.isActive"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ entrada.icono }}</mat-icon>
+              <span matListItemTitle>{{ entrada.etiqueta }}</span>
+            </a>
+          }
         }
       </mat-nav-list>
     </mat-sidenav>

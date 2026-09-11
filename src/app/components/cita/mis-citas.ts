@@ -11,9 +11,10 @@ import { mensajeDeError } from '../../core/http/api-error';
 import { CitaResumen } from '../../models';
 import { CitaService } from '../../services/cita.service';
 import { CancelarDialogo, CancelarDialogoDatos } from './cancelar-dialogo';
+import { etiquetaEstado, repartirCitas } from './repartir-citas';
 
 /**
- * Las citas del propio paciente (HU-15 · RF-18, RF-19).
+ * Las citas **próximas** del propio paciente (HU-15 · RF-18, RF-19).
  *
  * <p>No reutiliza `Agenda`: aquella es una tabla de recepción, con filtros por
  * odontólogo, columna de paciente y bitácora, y aquí nada de eso tiene sentido
@@ -21,9 +22,11 @@ import { CancelarDialogo, CancelarDialogoDatos } from './cancelar-dialogo';
  * filas—. Lo que sí se reutiliza es el diálogo de cancelación, que es donde
  * está la parte con reglas.
  *
- * <p>Las futuras y las pasadas se separan aquí y no en el servidor, igual que en
- * la ficha del paciente: allí habría que fijar qué es «ahora» para toda la
- * clínica, y el cliente ya tiene la fecha y la hora locales de cada cita.
+ * <p>Las pasadas están en `HistorialCitas`, y el corte entre unas y otras lo hace
+ * `repartirCitas`: el servidor devuelve ambas juntas, porque fijar ahí qué es
+ * «ahora» sería fijarlo para toda la clínica, y el cliente ya tiene la fecha y la
+ * hora locales de cada cita. Aquí solo quedan las próximas porque es donde vive
+ * el botón de cancelar; una lista con lo de años atrás lo enterraría.
  *
  * <p><strong>El botón de cancelar lo decide el servidor</strong>, mediante
  * `cancelablePorPaciente`. La ventana de RN-06 tiene una excepción —la cita que
@@ -117,35 +120,11 @@ import { CancelarDialogo, CancelarDialogoDatos } from './cancelar-dialogo';
       </section>
     }
 
-    @if (pasadas().length > 0) {
-      <section>
-        <h2>Anteriores</h2>
-        <ul class="citas">
-          @for (cita of pasadas(); track cita.id) {
-            <li>
-              <mat-card class="cita pasada">
-                <mat-card-content>
-                  <div class="datos">
-                    <p class="cuando">
-                      {{ cita.fecha | date: "d 'de' MMMM 'de' y" }} ·
-                      {{ cita.hora.slice(0, 5) }}
-                    </p>
-                    <p class="que">{{ cita.tratamiento.nombre }}</p>
-                    <p class="quien">{{ cita.odontologo.nombre }}</p>
-                    <p class="codigo">
-                      {{ cita.codigo }} ·
-                      <span class="estado">{{ etiquetaEstado(cita.estado) }}</span>
-                    </p>
-                    @if (cita.motivoCancelacion) {
-                      <p class="motivo">Motivo: {{ cita.motivoCancelacion }}</p>
-                    }
-                  </div>
-                </mat-card-content>
-              </mat-card>
-            </li>
-          }
-        </ul>
-      </section>
+    @if (!cargando() && futuras().length === 0 && citas().length > 0) {
+      <p class="vacio">
+        No tienes ninguna cita próxima.
+        <a routerLink="/mis-citas/historial">Consulta tu historial</a> para ver las anteriores.
+      </p>
     }
   `,
   styles: `
@@ -198,16 +177,12 @@ import { CancelarDialogo, CancelarDialogoDatos } from './cancelar-dialogo';
     /* Color propio en vez de opacidad: al 70 % el contraste caia por debajo del
        4.5:1 que exige RNF-08. */
     .codigo,
-    .motivo,
     .fuera-de-plazo {
       font-size: 0.8125rem;
       color: var(--mat-sys-on-surface-variant, #45464f);
     }
     .estado {
       font-weight: 600;
-    }
-    .pasada .estado {
-      font-weight: 500;
     }
     .acciones {
       display: flex;
@@ -252,8 +227,7 @@ export class MisCitas {
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  protected readonly futuras = computed(() => this.reparto().futuras);
-  protected readonly pasadas = computed(() => this.reparto().pasadas);
+  protected readonly futuras = computed(() => repartirCitas(this.citas()).futuras);
 
   constructor() {
     this.cargar();
@@ -263,9 +237,11 @@ export class MisCitas {
     this.cargando.set(true);
     this.error.set(null);
 
-    // Sin rango: el criterio pide ver las futuras y las pasadas. El tamaño es
-    // holgado porque un paciente no acumula cientos de citas, y paginar una
-    // lista que se lee de un vistazo estorbaría más de lo que ayuda.
+    // Sin rango de fechas, aunque aquí solo se pinten las próximas: `desde` es
+    // por día, así que una cita de esta misma mañana llegaría igual y habría que
+    // descartarla por hora. El corte lo hace `repartirCitas` y este filtro solo
+    // añadiría una forma más de equivocarse. El tamaño es holgado porque las
+    // citas activas de un paciente las acota RN-07.
     this.servicio.mias({}, { size: 100 }).subscribe({
       next: (pagina) => {
         this.citas.set(pagina.content);
@@ -295,47 +271,5 @@ export class MisCitas {
       });
   }
 
-  protected etiquetaEstado(estado: string): string {
-    switch (estado) {
-      case 'CONFIRMADA':
-        return 'Confirmada';
-      case 'ATENDIDA':
-        return 'Atendida';
-      case 'NO_ASISTIO':
-        return 'No asististe';
-      case 'CANCELADA':
-        return 'Cancelada';
-      default:
-        return estado;
-    }
-  }
-
-  /**
-   * Futura es la que todavía no ha empezado. Se compara construyendo la fecha
-   * local a partir de las cadenas, sin pasar por UTC: `new Date(cita.fecha)`
-   * interpretaría "2026-09-14" como medianoche UTC y desplazaría el día entero
-   * al huso del navegador.
-   */
-  private reparto(): { futuras: CitaResumen[]; pasadas: CitaResumen[] } {
-    const ahora = Date.now();
-    const futuras: CitaResumen[] = [];
-    const pasadas: CitaResumen[] = [];
-
-    for (const cita of this.citas()) {
-      if (instanteLocal(cita.fecha, cita.hora) >= ahora) {
-        futuras.push(cita);
-      } else {
-        pasadas.push(cita);
-      }
-    }
-    // Las próximas, de la más cercana a la más lejana: la de mañana primero.
-    futuras.reverse();
-    return { futuras, pasadas };
-  }
-}
-
-function instanteLocal(fecha: string, hora: string): number {
-  const [a, m, d] = fecha.split('-').map(Number);
-  const [hh, mm] = hora.split(':').map(Number);
-  return new Date(a, m - 1, d, hh, mm).getTime();
+  protected readonly etiquetaEstado = etiquetaEstado;
 }

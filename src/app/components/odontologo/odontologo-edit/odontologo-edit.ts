@@ -120,6 +120,16 @@ import { buscarEnPaginas, cargarTodasLasPaginas } from '../../../shared/buscar-e
             }
           </mat-form-field>
 
+          <!--
+            RF-10 (v4): la imagen de la ficha con que se presenta al publico. Es
+            una ruta, no una subida; las de demostracion viajan con este cliente.
+          -->
+          <mat-form-field appearance="outline">
+            <mat-label>Imagen (opcional)</mat-label>
+            <input matInput formControlName="imagenUrl" placeholder="/img/catalogo/ejemplo.svg" />
+            <mat-hint>Ruta o URL de la imagen que se ve en «Nuestro equipo»</mat-hint>
+          </mat-form-field>
+
           @if (error(); as mensaje) {
             <p class="error" role="alert">{{ mensaje }}</p>
           }
@@ -214,6 +224,7 @@ export class OdontologoEdit {
     apellidos: ['', [Validators.required]],
     fichaId: ['', [Validators.required]],
     especialidadesIds: [[] as string[], [Validators.required]],
+    imagenUrl: [''],
   });
 
   constructor() {
@@ -281,6 +292,7 @@ export class OdontologoEdit {
       apellidos: fila.apellidos,
       fichaId: fila.fichaId,
       especialidadesIds: fila.especialidades.map((e) => e.id),
+      imagenUrl: fila.imagenUrl ?? '',
     });
   }
 
@@ -291,7 +303,10 @@ export class OdontologoEdit {
     this.cargando.set(true);
     this.error.set(null);
 
-    const cuerpo = this.formulario.getRawValue();
+    const valores = this.formulario.getRawValue();
+    // PUT reemplaza el recurso entero: mandar la imagen vacia la borraria, y no
+    // mandarla tambien.
+    const cuerpo = { ...valores, imagenUrl: valores.imagenUrl || undefined };
 
     const peticion = this.id
       ? this.servicio.reemplazar(this.id, cuerpo)

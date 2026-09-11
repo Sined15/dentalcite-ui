@@ -6,7 +6,7 @@ import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { environment } from '../../../environments/environment';
@@ -31,12 +31,14 @@ const ENDODONCIA: Especialidad = {
   nombre: 'ENDODONCIA',
   descripcion: null,
   activo: true,
+  imagenUrl: null,
 };
 const ORTODONCIA: Especialidad = {
   id: 'esp-2',
   nombre: 'ORTODONCIA',
   descripcion: null,
   activo: true,
+  imagenUrl: null,
 };
 
 const TRATAMIENTOS: Tratamiento[] = [
@@ -48,6 +50,7 @@ const TRATAMIENTOS: Tratamiento[] = [
     duracionMinutos: 30,
     especialidad: ENDODONCIA,
     activo: true,
+    imagenUrl: null,
   },
   {
     id: 'tra-2',
@@ -57,6 +60,7 @@ const TRATAMIENTOS: Tratamiento[] = [
     duracionMinutos: 30,
     especialidad: ENDODONCIA,
     activo: false,
+    imagenUrl: null,
   },
 ];
 
@@ -68,6 +72,7 @@ function odontologo(id: string, nombres: string, especialidades: Especialidad[])
     apellidos: 'Apellido',
     fichaId: `fic-${id}`,
     activo: true,
+    imagenUrl: null,
     especialidades,
   };
 }
@@ -135,12 +140,38 @@ const PACIENTE: Paciente = {
   tieneCuenta: false,
 };
 
+/**
+ * El formulario maneja fechas desde que el rango se elige en un calendario, asi
+ * que las pruebas construyen dias locales y no cadenas.
+ *
+ * Y los construyen **relativos a hoy**, no en fechas fijas: el calendario acota
+ * la ventana de RNF-01 entre hoy y hoy+13, de modo que un dia escrito a mano
+ * caeria fuera en cuanto pasara esa fecha y la prueba se rompería sola.
+ */
+function hoyMas(dias: number): Date {
+  const hoy = new Date();
+  return new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + dias);
+}
+
+function iso(fecha: Date): string {
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${fecha.getFullYear()}-${mes}-${dia}`;
+}
+
+/** Un dia cualquiera dentro de la ventana consultable. */
+const DIA = hoyMas(3);
+
 interface Interno {
   formulario: {
-    patchValue: (valores: Record<string, string>) => void;
+    patchValue: (valores: Record<string, string | Date>) => void;
     invalid: boolean;
     hasError: (codigo: string) => boolean;
-    controls: { odontologoId: { value: string } };
+    controls: {
+      odontologoId: { value: string };
+      tratamientoId: { value: string };
+      dia: { hasError: (codigo: string) => boolean };
+    };
   };
   odontologosAptos: () => Odontologo[];
   tratamientos: () => Tratamiento[];
@@ -193,6 +224,7 @@ describe('Disponibilidad', () => {
   async function montarComo(
     rol: string,
     cierraCon: ReservarResultado | null = { cita: CITA },
+    query: Record<string, string> = {},
   ): Promise<void> {
     TestBed.resetTestingModule();
     localStorage.clear();
@@ -217,6 +249,12 @@ describe('Disponibilidad', () => {
         provideHttpClientTesting(),
         { provide: LOCALE_ID, useValue: 'es-PE' },
         { provide: MatDialog, useValue: dialogoDoble },
+        // Despues de `provideRouter`, que tambien declara `ActivatedRoute`: aqui
+        // solo interesa la query con la que se entra a la pantalla.
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
       ],
     });
     httpMock = TestBed.inject(HttpTestingController);
@@ -236,6 +274,33 @@ describe('Disponibilidad', () => {
 
   it('descarta del selector los tratamientos dados de baja', () => {
     expect(componente.tratamientos().map((t) => t.id)).toEqual(['tra-1']);
+  });
+
+  /**
+   * HU-06 (v4): se llega aqui desde «pedir cita» en el detalle de una
+   * especialidad. Si el tratamiento no viniera ya elegido, el visitante tendria
+   * que volver a buscarlo en el desplegable y el enlace no serviria de nada.
+   */
+  it('precarga el tratamiento que indica la URL', async () => {
+    await montarComo('PACIENTE', { cita: CITA }, { tratamientoId: 'tra-1' });
+
+    expect(componente.formulario.controls.tratamientoId.value).toBe('tra-1');
+  });
+
+  it('con el tratamiento precargado ya resuelve los odontologos aptos', async () => {
+    await montarComo('PACIENTE', { cita: CITA }, { tratamientoId: 'tra-1' });
+    await fixture.whenStable();
+
+    // Lo mismo que si lo hubiera elegido a mano: RN-08 se aplica igual.
+    expect(componente.odontologosAptos().map((o) => o.id)).toEqual(['odo-1']);
+  });
+
+  it('ignora un tratamientoId que no esta entre los activos', async () => {
+    // `tra-2` esta dado de baja: dejarlo elegido pondria en el desplegable un
+    // identificador sin etiqueta que mostrar.
+    await montarComo('PACIENTE', { cita: CITA }, { tratamientoId: 'tra-2' });
+
+    expect(componente.formulario.controls.tratamientoId.value).toBe('');
   });
 
   it('RN-08: solo ofrece los odontologos con la especialidad del tratamiento', async () => {
@@ -262,15 +327,14 @@ describe('Disponibilidad', () => {
     componente.formulario.patchValue({
       tratamientoId: 'tra-1',
       odontologoId: '',
-      desde: '2026-09-14',
-      hasta: '2026-09-14',
+      dia: DIA,
     });
     await fixture.whenStable();
     componente.consultar();
 
     const req = httpMock.expectOne((r) => r.url === API);
     expect(req.request.params.get('tratamientoId')).toBe('tra-1');
-    expect(req.request.params.get('desde')).toBe('2026-09-14');
+    expect(req.request.params.get('desde')).toBe(iso(DIA));
     // Ausente, no vacio: el parametro vacio no significa «cualquiera».
     expect(req.request.params.has('odontologoId')).toBe(false);
     req.flush(RESPUESTA);
@@ -291,8 +355,7 @@ describe('Disponibilidad', () => {
   it('muestra las franjas agrupadas de treinta en treinta', async () => {
     componente.formulario.patchValue({
       tratamientoId: 'tra-1',
-      desde: '2026-09-14',
-      hasta: '2026-09-14',
+      dia: DIA,
     });
     await fixture.whenStable();
     componente.consultar();
@@ -307,8 +370,7 @@ describe('Disponibilidad', () => {
     // mira el DOM, que es lo que ve el paciente.
     componente.formulario.patchValue({
       tratamientoId: 'tra-1',
-      desde: '2026-09-14',
-      hasta: '2026-09-14',
+      dia: DIA,
     });
     await fixture.whenStable();
     componente.consultar();
@@ -334,8 +396,7 @@ describe('Disponibilidad', () => {
   it('avisa cuando el rango no tiene ninguna franja', async () => {
     componente.formulario.patchValue({
       tratamientoId: 'tra-1',
-      desde: '2026-09-14',
-      hasta: '2026-09-14',
+      dia: DIA,
     });
     await fixture.whenStable();
     componente.consultar();
@@ -351,8 +412,7 @@ describe('Disponibilidad', () => {
   it('el conmutador de quince minutos reexpande sin volver a pedir', async () => {
     componente.formulario.patchValue({
       tratamientoId: 'tra-1',
-      desde: '2026-09-14',
-      hasta: '2026-09-14',
+      dia: DIA,
     });
     await fixture.whenStable();
     componente.consultar();
@@ -366,51 +426,36 @@ describe('Disponibilidad', () => {
     httpMock.verify();
   });
 
-  it('RNF-01: un rango de mas de catorce dias no llega a salir', async () => {
-    componente.formulario.patchValue({
-      tratamientoId: 'tra-1',
-      desde: '2026-09-14',
-      hasta: '2026-09-28',
-    });
+  it('el dia elegido viaja en los dos extremos del rango', async () => {
+    // La API pregunta por rango y la pantalla por un dia: se le manda el mismo
+    // en `desde` y en `hasta`, que es un rango de un solo dia.
+    componente.formulario.patchValue({ tratamientoId: 'tra-1', dia: DIA });
     await fixture.whenStable();
-
-    expect(componente.formulario.hasError('rangoLargo')).toBe(true);
     componente.consultar();
 
-    // El servidor tambien lo rechaza, pero el viaje se ahorra.
-    httpMock.verify();
+    const req = httpMock.expectOne((r) => r.url === API);
+    expect(req.request.params.get('desde')).toBe(iso(DIA));
+    expect(req.request.params.get('hasta')).toBe(iso(DIA));
+    req.flush(RESPUESTA);
   });
 
-  it('un rango invertido tampoco sale', async () => {
-    componente.formulario.patchValue({
-      tratamientoId: 'tra-1',
-      desde: '2026-09-15',
-      hasta: '2026-09-14',
-    });
+  it('el calendario no admite un dia fuera de la ventana consultable', async () => {
+    // La ventana de RNF-01 esta puesta como limite del propio calendario, asi
+    // que el dia veinte ni siquiera se puede marcar: el control lo rechaza sin
+    // que haga falta llegar al aviso de «rango demasiado largo».
+    componente.formulario.patchValue({ tratamientoId: 'tra-1', dia: hoyMas(20) });
     await fixture.whenStable();
 
-    expect(componente.formulario.hasError('rangoInvertido')).toBe(true);
+    expect(componente.formulario.controls.dia.hasError('matDatepickerMax')).toBe(true);
+    expect(componente.formulario.invalid).toBe(true);
     componente.consultar();
     httpMock.verify();
-  });
-
-  it('un rango de exactamente catorce dias es valido', async () => {
-    componente.formulario.patchValue({
-      tratamientoId: 'tra-1',
-      desde: '2026-09-14',
-      hasta: '2026-09-27',
-    });
-    await fixture.whenStable();
-
-    expect(componente.formulario.hasError('rangoLargo')).toBe(false);
-    expect(componente.formulario.invalid).toBe(false);
   });
 
   it('muestra el mensaje del servidor cuando la consulta falla', async () => {
     componente.formulario.patchValue({
       tratamientoId: 'tra-1',
-      desde: '2026-09-14',
-      hasta: '2026-09-14',
+      dia: DIA,
     });
     await fixture.whenStable();
     componente.consultar();
@@ -431,8 +476,7 @@ describe('Disponibilidad', () => {
   async function consultarConResultado(): Promise<void> {
     componente.formulario.patchValue({
       tratamientoId: 'tra-1',
-      desde: '2026-09-14',
-      hasta: '2026-09-14',
+      dia: DIA,
     });
     await fixture.whenStable();
     componente.consultar();

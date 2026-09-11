@@ -23,6 +23,7 @@ const ENDODONCIA: Especialidad = {
   nombre: 'ENDODONCIA',
   descripcion: null,
   activo: true,
+  imagenUrl: null,
 };
 
 const ODONTOLOGOS: Odontologo[] = [
@@ -33,6 +34,7 @@ const ODONTOLOGOS: Odontologo[] = [
     apellidos: 'Pérez',
     fichaId: 'fic-odo-1',
     activo: true,
+    imagenUrl: null,
     especialidades: [ENDODONCIA],
   },
   {
@@ -42,6 +44,7 @@ const ODONTOLOGOS: Odontologo[] = [
     apellidos: 'Retirado',
     fichaId: 'fic-odo-2',
     activo: false,
+    imagenUrl: null,
     especialidades: [ENDODONCIA],
   },
 ];

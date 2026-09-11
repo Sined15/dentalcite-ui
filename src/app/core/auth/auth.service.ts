@@ -98,9 +98,18 @@ export class AuthService {
     }
   }
 
+  /**
+   * El cierre **voluntario**, y por eso deja al usuario en la portada y no en el
+   * formulario de acceso: quien pulsa «cerrar sesion» se esta yendo, no pidiendo
+   * volver a entrar, y desde la revision v4 hay un sitio publico donde dejarlo.
+   *
+   * Los otros dos cierres siguen yendo a `/login` y no pasan por aqui, porque
+   * ahi el usuario estaba a mitad de algo: el interceptor cuando el backend
+   * revoca el token, y el cambio de la contraseña provisional.
+   */
   private limpiarYSalir(): void {
     this.limpiarSesion();
-    void this.router.navigate(['/login']);
+    void this.router.navigate(['/']);
   }
 }
 

@@ -44,6 +44,17 @@ import { buscarEnPaginas } from '../../../shared/buscar-en-paginas';
             <textarea matInput rows="3" formControlName="descripcion"></textarea>
           </mat-form-field>
 
+          <!--
+            RF-09 (v4): la imagen con que la especialidad se presenta en la
+            galeria publica. Es una ruta, no una subida: las de demostracion
+            viajan con este mismo cliente, en public/img/catalogo/.
+          -->
+          <mat-form-field appearance="outline">
+            <mat-label>Imagen (opcional)</mat-label>
+            <input matInput formControlName="imagenUrl" placeholder="/img/catalogo/ejemplo.svg" />
+            <mat-hint>Ruta o URL de la imagen que se ve en la galeria publica</mat-hint>
+          </mat-form-field>
+
           @if (error(); as mensaje) {
             <p class="error" role="alert">{{ mensaje }}</p>
           }
@@ -104,6 +115,7 @@ export class EspecialidadEdit {
   protected readonly formulario = this.fb.nonNullable.group({
     nombre: ['', [Validators.required]],
     descripcion: [''],
+    imagenUrl: [''],
   });
 
   constructor() {
@@ -119,7 +131,11 @@ export class EspecialidadEdit {
       | undefined;
 
     if (fila) {
-      this.formulario.patchValue({ nombre: fila.nombre, descripcion: fila.descripcion ?? '' });
+      this.formulario.patchValue({
+        nombre: fila.nombre,
+        descripcion: fila.descripcion ?? '',
+        imagenUrl: fila.imagenUrl ?? '',
+      });
       return;
     }
 
@@ -134,6 +150,7 @@ export class EspecialidadEdit {
           this.formulario.patchValue({
             nombre: encontrada.nombre,
             descripcion: encontrada.descripcion ?? '',
+            imagenUrl: encontrada.imagenUrl ?? '',
           });
         } else {
           this.error.set('No se encontró la especialidad indicada.');
@@ -157,6 +174,8 @@ export class EspecialidadEdit {
     const cuerpo = {
       nombre: valores.nombre,
       descripcion: valores.descripcion || undefined,
+      // PUT reemplaza el recurso entero: omitir la imagen la borraria.
+      imagenUrl: valores.imagenUrl || undefined,
     };
 
     const peticion = this.id

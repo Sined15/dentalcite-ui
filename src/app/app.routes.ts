@@ -38,6 +38,42 @@ export const routes: Routes = [
       import('./components/auth/sin-permiso/sin-permiso').then((m) => m.SinPermiso),
   },
 
+  // Area publica (HU-06, v4): el visitante recorre el catalogo sin cuenta. No
+  // pasa por `passwordGuard` ni por `rolGuard`, y no la envuelve el shell: la
+  // envuelve `PublicoLayout`, con su propia cabecera. Los nombres evitan chocar
+  // con /especialidades y /odontologos, que son las pantallas de mantenimiento.
+  {
+    path: '',
+    loadComponent: () =>
+      import('./components/publico/publico-layout').then((m) => m.PublicoLayout),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        loadComponent: () => import('./components/publico/portada').then((m) => m.Portada),
+      },
+      {
+        path: 'nuestras-especialidades',
+        loadComponent: () =>
+          import('./components/publico/especialidades-publicas').then(
+            (m) => m.EspecialidadesPublicas,
+          ),
+      },
+      {
+        path: 'nuestras-especialidades/:id',
+        loadComponent: () =>
+          import('./components/publico/especialidad-detalle').then(
+            (m) => m.EspecialidadDetalleComponent,
+          ),
+      },
+      {
+        path: 'nuestro-equipo',
+        loadComponent: () =>
+          import('./components/publico/odontologos-publicos').then((m) => m.OdontologosPublicos),
+      },
+    ],
+  },
+
   // Todo lo demas cuelga de una ruta protegida por `passwordGuard`, para que la
   // exigencia de cambiar la contraseña provisional no se pueda esquivar
   // navegando directamente a una URL.
@@ -56,7 +92,10 @@ export const routes: Routes = [
       {
         path: 'especialidades',
         canActivate: [rolGuard],
-        data: { roles: TODOS },
+        // v4: pantalla de mantenimiento, y el criterio de HU-06 dice que quien no
+        // administra no ve acciones de mantenimiento. Los otros roles no pierden
+        // lectura del catalogo: la tienen en las paginas publicas.
+        data: { roles: ADMIN },
         loadComponent: () =>
           import('./components/especialidad/especialidad-list').then((m) => m.EspecialidadList),
       },
@@ -82,7 +121,10 @@ export const routes: Routes = [
       {
         path: 'tratamientos',
         canActivate: [rolGuard],
-        data: { roles: TODOS },
+        // v4: pantalla de mantenimiento, y el criterio de HU-06 dice que quien no
+        // administra no ve acciones de mantenimiento. Los otros roles no pierden
+        // lectura del catalogo: la tienen en las paginas publicas.
+        data: { roles: ADMIN },
         loadComponent: () =>
           import('./components/tratamiento/tratamiento-list').then((m) => m.TratamientoList),
       },
@@ -108,7 +150,10 @@ export const routes: Routes = [
       {
         path: 'odontologos',
         canActivate: [rolGuard],
-        data: { roles: TODOS },
+        // v4: pantalla de mantenimiento, y el criterio de HU-06 dice que quien no
+        // administra no ve acciones de mantenimiento. Los otros roles no pierden
+        // lectura del catalogo: la tienen en las paginas publicas.
+        data: { roles: ADMIN },
         loadComponent: () =>
           import('./components/odontologo/odontologo-list').then((m) => m.OdontologoList),
       },
@@ -177,6 +222,27 @@ export const routes: Routes = [
         canActivate: [rolGuard],
         data: { roles: SOLO_PACIENTE },
         loadComponent: () => import('./components/cita/mis-citas').then((m) => m.MisCitas),
+      },
+
+      // Las pasadas, que antes eran una seccion de la pantalla anterior. Cuelga
+      // de 'mis-citas' porque es lo mismo mirado hacia atras, y asi el grupo del
+      // menu se corresponde con el prefijo de la ruta.
+      {
+        path: 'mis-citas/historial',
+        canActivate: [rolGuard],
+        data: { roles: SOLO_PACIENTE },
+        loadComponent: () =>
+          import('./components/cita/historial-citas').then((m) => m.HistorialCitas),
+      },
+
+      // Los tratamientos que el paciente ha recibido, no el catalogo: por eso no
+      // es '/tratamientos', que ya existe y es el mantenimiento del ADMINISTRADOR.
+      {
+        path: 'mis-tratamientos',
+        canActivate: [rolGuard],
+        data: { roles: SOLO_PACIENTE },
+        loadComponent: () =>
+          import('./components/cita/mis-tratamientos').then((m) => m.MisTratamientos),
       },
 
       // HU-13 · RF-07: la busqueda es del personal.
@@ -249,13 +315,6 @@ export const routes: Routes = [
           import('./components/bloqueo/bloqueo-edit/bloqueo-edit').then((m) => m.BloqueoEdit),
       },
 
-      // La raiz redirige segun el rol, no a una ruta fija: un PACIENTE no debe
-      // aterrizar en /usuarios para recibir un 403.
-      {
-        path: '',
-        pathMatch: 'full',
-        loadComponent: () => import('./components/inicio/inicio').then((m) => m.Inicio),
-      },
     ],
   },
 

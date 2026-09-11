@@ -7,7 +7,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { environment } from '../../../../environments/environment';
-import { CitaResumen, EstadoCita, PacienteDetalle } from '../../../models';
+import { CitaResumen, EstadoCita, PacienteDetalle, Plan } from '../../../models';
 import { PacienteFicha } from './paciente-ficha';
 
 registerLocaleData(localeEsPe);
@@ -60,12 +60,36 @@ interface Interno {
   formulario: { patchValue: (v: Record<string, unknown>) => void };
   guardar: () => void;
   error: () => string | null;
+  puedePlanificar: () => boolean;
+  planes: () => Plan[];
+  suspenderPlan: (p: Plan) => void;
 }
 
+const URL_PLANES = `${environment.apiUrl}/api/v1/planes`;
+
+/** Un plan activo de seis sesiones, todas pendientes (HU-17). */
+const PLAN: Plan = {
+  id: 'plan-1',
+  paciente: { id: FICHA_ID, nombre: 'Ramos, Julio' },
+  tratamiento: { id: 'tra-1', nombre: 'Ortodoncia' },
+  odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
+  sesionesPrevistas: 6,
+  activo: true,
+  motivoSuspension: null,
+  creadoEn: '2026-09-01T09:00:00Z',
+  sesiones: [1, 2, 3, 4, 5, 6].map((numero) => ({
+    id: `ses-${numero}`,
+    numero,
+    estado: 'PENDIENTE' as const,
+  })),
+};
+
 /**
- * HU-13 · RF-08. Lo que se comprueba: que la ficha se pinta con sus alergias y
- * sus citas repartidas en pasadas y futuras, y que el formulario de corrección
- * solo aparece para quien RF-08 autoriza a editar.
+ * HU-13 · RF-08 y la sección de planes que HU-17 añade. Lo que se comprueba: que
+ * la ficha se pinta con sus alergias y sus citas repartidas en pasadas y
+ * futuras, que el formulario de corrección solo aparece para quien RF-08
+ * autoriza a editar, y que los planes solo se piden y se pintan para quien puede
+ * planificar.
  */
 describe('PacienteFicha', () => {
   let fixture: ComponentFixture<PacienteFicha>;
@@ -153,5 +177,73 @@ describe('PacienteFicha', () => {
       );
 
     expect(componente.error()).toContain('No ha atendido a este paciente');
+  });
+
+  // ------------------------------------------------------------------
+  // HU-17 · los planes de tratamiento
+  // ------------------------------------------------------------------
+
+  it('HU-17: como odontologo pide los planes del paciente', () => {
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+
+    const req = httpMock.expectOne((r) => r.url === URL_PLANES);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('pacienteId')).toBe(FICHA_ID);
+    req.flush([PLAN]);
+
+    expect(componente.puedePlanificar()).toBe(true);
+    expect(componente.planes().map((p) => p.id)).toEqual(['plan-1']);
+  });
+
+  it('HU-17: como recepcion no los pide siquiera', () => {
+    // El servidor le responderia 403: pintarle una seccion vacia prometeria algo
+    // que no puede abrir.
+    montar('RECEPCIONISTA');
+    httpMock.expectOne(URL).flush(DETALLE);
+
+    expect(componente.puedePlanificar()).toBe(false);
+    // Si se hubiera pedido, esto fallaria: no queda ninguna peticion pendiente.
+    httpMock.verify();
+  });
+
+  it('HU-17: pinta el plan con sus sesiones previstas y ofrece suspenderlo', async () => {
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+    httpMock.expectOne((r) => r.url === URL_PLANES).flush([PLAN]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(raiz.textContent).toContain('Ortodoncia');
+    expect(raiz.textContent).toContain('6 sesiones previstas');
+    expect(raiz.querySelector('button[aria-label^="Suspender el plan"]')).not.toBeNull();
+  });
+
+  it('HU-17: un plan suspendido no ofrece volver a suspenderse', async () => {
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+    httpMock
+      .expectOne((r) => r.url === URL_PLANES)
+      .flush([{ ...PLAN, activo: false, motivoSuspension: 'El paciente se muda' }]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(raiz.querySelector('button[aria-label^="Suspender el plan"]')).toBeNull();
+    // RN-12: el registro se conserva, con su motivo a la vista.
+    expect(raiz.textContent).toContain('El paciente se muda');
+  });
+
+  it('HU-17: sin planes lo dice en vez de dejar la seccion en blanco', async () => {
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+    httpMock.expectOne((r) => r.url === URL_PLANES).flush([]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'No tiene ningún plan de tratamiento',
+    );
   });
 });

@@ -6,6 +6,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
+import { provideNativeDateAdapter } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -45,12 +47,16 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
     MatButtonModule,
     MatButtonToggleModule,
     MatCardModule,
+    MatDatepickerModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatProgressBarModule,
     MatSelectModule,
   ],
+  // El adaptador nativo toma el locale de la aplicacion (es-PE), asi que el
+  // calendario empieza la semana en lunes y escribe las fechas como aqui se leen.
+  providers: [provideNativeDateAdapter()],
   template: `
     <h1>Franjas disponibles</h1>
 
@@ -126,32 +132,32 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
             }
           </mat-form-field>
 
-          <div class="fila">
-            <mat-form-field appearance="outline">
-              <mat-label>Desde</mat-label>
-              <input matInput type="date" formControlName="desde" />
-              @if (formulario.controls.desde.hasError('required')) {
-                <mat-error>La fecha inicial es obligatoria</mat-error>
-              }
-            </mat-form-field>
+          <!--
+            Un dia, elegido en el calendario. El campo es de solo lectura y abre
+            el mes al pulsarlo: escribir la fecha a mano era la via de todos los
+            errores que habia que explicar despues —el dia inexistente, el formato
+            del pais, el rango al reves—, y ninguno puede darse marcando en el mes.
 
-            <mat-form-field appearance="outline">
-              <mat-label>Hasta</mat-label>
-              <input matInput type="date" formControlName="hasta" />
-              @if (formulario.controls.hasta.hasError('required')) {
-                <mat-error>La fecha final es obligatoria</mat-error>
-              }
-            </mat-form-field>
-          </div>
-
-          @if (formulario.hasError('rangoInvertido')) {
-            <p class="error" role="alert">La fecha inicial debe ser anterior o igual a la final.</p>
-          }
-          @if (formulario.hasError('rangoLargo')) {
-            <p class="error" role="alert">
-              El rango consultable es de {{ diasMaximos }} días como máximo.
-            </p>
-          }
+            Los limites acotan ahi mismo la ventana de RNF-01: lo que el motor no
+            puede responder sale apagado y no se puede pulsar.
+          -->
+          <mat-form-field appearance="outline" class="dia">
+            <mat-label>Dia en el que quieres venir</mat-label>
+            <input
+              matInput
+              readonly
+              [matDatepicker]="calendario"
+              [min]="minimoConsultable"
+              [max]="maximoConsultable"
+              formControlName="dia"
+              (click)="calendario.open()"
+            />
+            <mat-datepicker-toggle matIconSuffix [for]="calendario" />
+            <mat-datepicker #calendario />
+            @if (formulario.controls.dia.hasError('required')) {
+              <mat-error>Marca el dia en el calendario</mat-error>
+            }
+          </mat-form-field>
 
           <p class="nota">
             Las citas se reservan con al menos dos horas de antelación, así que las franjas más
@@ -423,7 +429,6 @@ export class Disponibilidad {
   /** La última reserva de esta sesión, para que su código siga a la vista. */
   protected readonly ultimaReserva = signal<Cita | null>(null);
 
-  protected readonly diasMaximos = DIAS_MAXIMOS;
   protected readonly pasoMotor = PASO_MOTOR_MINUTOS;
   protected readonly pasoAgrupacion = PASO_AGRUPACION_MINUTOS;
 
@@ -435,32 +440,29 @@ export class Disponibilidad {
   protected readonly error = signal<string | null>(null);
   protected readonly paso = signal<number>(PASO_AGRUPACION_MINUTOS);
 
-  protected readonly formulario = this.fb.nonNullable.group(
-    {
-      // Guarda el objeto elegido, no una cadena: el autocompletado necesita el
-      // paciente entero para pintarlo y para mandar su identificador.
-      paciente: [null as Paciente | string | null],
-      tratamientoId: ['', [Validators.required]],
-      odontologoId: [''],
-      desde: [hoy(), [Validators.required]],
-      hasta: [sumarDias(hoy(), DIAS_MAXIMOS - 1), [Validators.required]],
-    },
-    {
-      // El servidor devuelve 400 en ambos casos; comprobarlo aqui ahorra el
-      // viaje y explica el limite antes de pulsar.
-      validators: (grupo) => {
-        const desde = grupo.get('desde')?.value as string;
-        const hasta = grupo.get('hasta')?.value as string;
-        if (!desde || !hasta) {
-          return null;
-        }
-        if (desde > hasta) {
-          return { rangoInvertido: true };
-        }
-        return diasEntre(desde, hasta) > DIAS_MAXIMOS ? { rangoLargo: true } : null;
-      },
-    },
-  );
+  /**
+   * La ventana que el motor puede responder (RNF-01), llevada al calendario: hoy
+   * y los trece dias siguientes. Fuera de ahi los dias salen apagados, que dice
+   * lo mismo que el aviso de «rango demasiado largo» pero antes de intentarlo.
+   */
+  protected readonly minimoConsultable = hoy();
+  protected readonly maximoConsultable = sumarDias(hoy(), DIAS_MAXIMOS - 1);
+
+  protected readonly formulario = this.fb.nonNullable.group({
+    // Guarda el objeto elegido, no una cadena: el autocompletado necesita el
+    // paciente entero para pintarlo y para mandar su identificador.
+    paciente: [null as Paciente | string | null],
+    tratamientoId: ['', [Validators.required]],
+    odontologoId: [''],
+    // Fecha y no cadena: es lo que maneja el calendario de Material. A la API
+    // sigue viajando como "YYYY-MM-DD", que la convierte `consultar`.
+    //
+    // Un dia y no un rango: el paciente viene un dia concreto, y preguntar por
+    // dos semanas para luego recorrer la respuesta buscando el suyo era hacerle
+    // pagar por franjas que no habia pedido. La API sigue siendo de rango —se le
+    // manda el mismo dia en los dos extremos—, asi que el motor no cambia.
+    dia: [this.minimoConsultable as Date | null, [Validators.required]],
+  });
 
   protected readonly tratamientoElegido = toSignal(
     this.formulario.controls.tratamientoId.valueChanges,
@@ -495,7 +497,11 @@ export class Disponibilidad {
     cargarTodasLasPaginas((pagina) =>
       this.tratamientoService.listar({ page: pagina, size: 100 }),
     ).subscribe({
-      next: (lista) => this.tratamientos.set(lista.filter((t) => t.activo)),
+      next: (lista) => {
+        const activos = lista.filter((t) => t.activo);
+        this.tratamientos.set(activos);
+        this.precargarTratamientoDeLaUrl(activos);
+      },
       error: (err: unknown) => this.error.set(mensajeDeError(err)),
     });
 
@@ -577,6 +583,27 @@ export class Disponibilidad {
    * Se llega aquí desde la ficha del paciente con `?pacienteId=…`, que es el
    * camino natural: primero se le busca (HU-13) y desde su ficha se reserva.
    */
+  /**
+   * Se llega aqui desde el detalle de una especialidad (HU-06) con
+   * `?tratamientoId=...`, igual que desde la ficha se llega con `?pacienteId=`.
+   *
+   * La diferencia con el paciente es que el tratamiento no necesita peticion
+   * propia: ya viene en el catalogo que acaba de llegar. Por eso se precarga
+   * dentro de esa misma respuesta y no en el constructor: fijar el valor antes
+   * dejaria al desplegable con un identificador sin etiqueta que mostrar.
+   *
+   * Se ignora en silencio el que no este entre los activos —un tratamiento dado
+   * de baja entre que se genero el enlace y se pulso—: la pantalla queda como si
+   * nadie hubiera elegido nada, que es exactamente donde puede seguir.
+   */
+  private precargarTratamientoDeLaUrl(tratamientos: Tratamiento[]): void {
+    const id = this.ruta.snapshot.queryParamMap.get('tratamientoId');
+    if (!id || !tratamientos.some((t) => t.id === id)) {
+      return;
+    }
+    this.formulario.controls.tratamientoId.setValue(id);
+  }
+
   private precargarPacienteDeLaUrl(): void {
     const id = this.ruta.snapshot.queryParamMap.get('pacienteId');
     if (!id) {
@@ -608,6 +635,12 @@ export class Disponibilidad {
       return;
     }
     const valores = this.formulario.getRawValue();
+    // `required` ya lo garantiza y el formulario invalido no llega hasta aqui;
+    // esto solo se lo dice al compilador, que no conoce esa regla.
+    if (!valores.dia) {
+      return;
+    }
+    const dia = aIso(valores.dia);
 
     this.cargando.set(true);
     this.error.set(null);
@@ -616,8 +649,10 @@ export class Disponibilidad {
       .consultar({
         tratamientoId: valores.tratamientoId,
         odontologoId: valores.odontologoId || undefined,
-        desde: valores.desde,
-        hasta: valores.hasta,
+        // El endpoint es de rango y el dia elegido va en los dos extremos: es
+        // un rango de un solo dia, y asi el motor no necesita otro contrato.
+        desde: dia,
+        hasta: dia,
       })
       .subscribe({
         next: (respuesta) => {
@@ -706,26 +741,24 @@ export class Disponibilidad {
 }
 
 /** Fecha local de hoy como "YYYY-MM-DD", sin pasar por UTC. */
-function hoy(): string {
+/** Hoy a medianoche local: el calendario compara dias, no instantes. */
+function hoy(): Date {
   const ahora = new Date();
-  const mes = String(ahora.getMonth() + 1).padStart(2, '0');
-  const dia = String(ahora.getDate()).padStart(2, '0');
-  return `${ahora.getFullYear()}-${mes}-${dia}`;
+  return new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 }
 
-function sumarDias(fecha: string, dias: number): string {
-  const [a, m, d] = fecha.split('-').map(Number);
-  const resultado = new Date(a, m - 1, d + dias);
-  const mes = String(resultado.getMonth() + 1).padStart(2, '0');
-  const dia = String(resultado.getDate()).padStart(2, '0');
-  return `${resultado.getFullYear()}-${mes}-${dia}`;
+function sumarDias(fecha: Date, dias: number): Date {
+  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + dias);
 }
 
-/** Dias del rango, ambos extremos incluidos. */
-function diasEntre(desde: string, hasta: string): number {
-  const [a1, m1, d1] = desde.split('-').map(Number);
-  const [a2, m2, d2] = hasta.split('-').map(Number);
-  const inicio = new Date(a1, m1 - 1, d1).getTime();
-  const fin = new Date(a2, m2 - 1, d2).getTime();
-  return Math.round((fin - inicio) / 86_400_000) + 1;
+/**
+ * La fecha como la espera la API: dia local en "YYYY-MM-DD".
+ *
+ * No sirve `toISOString()`: pasa por UTC, y en Lima una fecha a medianoche
+ * retrocederia al dia anterior.
+ */
+function aIso(fecha: Date): string {
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${fecha.getFullYear()}-${mes}-${dia}`;
 }

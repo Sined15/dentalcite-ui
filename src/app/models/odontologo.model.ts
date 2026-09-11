@@ -8,6 +8,8 @@ export interface Odontologo {
   apellidos: string;
   fichaId: string;
   activo: boolean;
+  /** RF-10 (v4): ruta de la imagen. Puede faltar; la vista pinta un marcador. */
+  imagenUrl: string | null;
   especialidades: Especialidad[];
 }
 
@@ -22,4 +24,5 @@ export interface OdontologoRequest {
   apellidos: string;
   fichaId: string;
   especialidadesIds: string[];
+  imagenUrl?: string;
 }

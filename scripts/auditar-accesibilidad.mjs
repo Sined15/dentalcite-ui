@@ -42,6 +42,12 @@ const PASSWORD = 'Password123';
  * sin rol: se visitan sin sesión, que es como las ve un visitante.
  */
 const PANTALLAS = [
+  // HU-06 (v4): el área pública. Van sin rol a propósito: se auditan como las ve
+  // un visitante, sin sesión, que es el único estado en que su cabecera ofrece
+  // iniciar sesión. Auditarlas con token mostraría otra cabecera y otra cosa.
+  [null, '/'],
+  [null, '/nuestras-especialidades'],
+  [null, '/nuestro-equipo'],
   [null, '/login'],
   [null, '/registro'],
   ['ADMINISTRADOR', '/perfil'],
@@ -55,7 +61,6 @@ const PANTALLAS = [
   ['ADMINISTRADOR', '/odontologos/nuevo'],
   ['ADMINISTRADOR', '/bloqueos'],
   ['ADMINISTRADOR', '/bloqueos/nuevo'],
-  ['PACIENTE', '/tratamientos'],
   ['ODONTOLOGO', '/bloqueos'],
   // Sprint 2
   ['ADMINISTRADOR', '/disponibilidad'],
@@ -70,21 +75,52 @@ const PANTALLAS = [
   ['PACIENTE', '/mis-citas'],
   ['ODONTOLOGO', '/citas/pendientes'],
   ['RECEPCIONISTA', '/citas/pendientes'],
+  // El menu del paciente. Aqui estaba `['PACIENTE', '/tratamientos']`, que desde
+  // la revision v4 no audita lo que dice: esa ruta es el mantenimiento del
+  // catalogo y el paciente acaba en /sin-permiso. Sus tratamientos son estos.
+  ['PACIENTE', '/mis-tratamientos'],
+  ['PACIENTE', '/mis-citas/historial'],
 ];
 
 /**
  * La ficha de HU-13 necesita un identificador concreto, asi que su ruta no se
  * puede escribir en la lista de arriba: se resuelve buscando un paciente con la
  * propia API antes de auditar.
+ *
+ * Se devuelven dos pantallas sobre la misma ruta porque no ensenan lo mismo: la
+ * seccion de planes de HU-17 solo se pinta para quien puede planificar, asi que
+ * auditar unicamente la vista de recepcion la dejaria sin mirar. El
+ * ADMINISTRADOR alcanza cualquier ficha y ademas planifica; el ODONTOLOGO solo
+ * las de sus pacientes, y cual sea depende de los datos.
  */
-async function pantallaDeFicha(tokenDeRecepcion) {
+async function pantallasDeFicha(tokenDeRecepcion) {
   const r = await fetch(`${API}/api/v1/pacientes?size=1`, {
     headers: { Authorization: `Bearer ${tokenDeRecepcion}` },
   });
-  if (!r.ok) return null;
+  if (!r.ok) return [];
   const pagina = await r.json();
   const paciente = pagina.content?.[0];
-  return paciente ? ['RECEPCIONISTA', `/pacientes/${paciente.id}`] : null;
+  if (!paciente) return [];
+  return [
+    ['RECEPCIONISTA', `/pacientes/${paciente.id}`],
+    ['ADMINISTRADOR', `/pacientes/${paciente.id}`],
+  ];
+}
+
+/**
+ * El detalle de especialidad de HU-06 también lleva identificador, así que se
+ * resuelve igual que la ficha. Se pide al **catálogo público**, sin token: si
+ * hiciera falta una sesión para averiguar qué auditar, la pantalla no sería
+ * pública.
+ */
+async function pantallaDeEspecialidad() {
+  const r = await fetch(`${API}/api/v1/publico/especialidades`);
+  if (!r.ok) return [];
+  const especialidades = await r.json();
+  // La que más contenido pinta es la que más superficie da que auditar.
+  const conOdontologos = especialidades.find((e) => e.nombre === 'Odontología Estética');
+  const elegida = conOdontologos ?? especialidades[0];
+  return elegida ? [[null, `/nuestras-especialidades/${elegida.id}`]] : [];
 }
 
 /** RNF-09 fija 360px como ancho mínimo; se audita ahí y en escritorio. */
@@ -190,11 +226,18 @@ try {
     tokens[rol] = await token(rol);
   }
 
-  const ficha = await pantallaDeFicha(tokens.RECEPCIONISTA);
-  if (ficha) {
-    PANTALLAS.push(ficha);
+  const fichas = await pantallasDeFicha(tokens.RECEPCIONISTA);
+  if (fichas.length > 0) {
+    PANTALLAS.push(...fichas);
   } else {
     console.log('AVISO  no hay pacientes que auditar: se omite /pacientes/{id}');
+  }
+
+  const detalle = await pantallaDeEspecialidad();
+  if (detalle.length > 0) {
+    PANTALLAS.push(...detalle);
+  } else {
+    console.log('AVISO  el catálogo público no devolvió especialidades: se omite su detalle');
   }
 
   const informe = [];

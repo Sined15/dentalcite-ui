@@ -12,15 +12,44 @@ import { filter, map } from 'rxjs';
 import { AuthService } from './core/auth/auth.service';
 import { Rol } from './models';
 
-interface EntradaMenu {
+interface EntradaMenuHija {
   ruta: string;
+  etiqueta: string;
+}
+
+/**
+ * Una entrada del cajon de navegacion.
+ *
+ * `ruta` es `null` cuando la entrada es un grupo: la cabecera despliega a sus
+ * hijos y no lleva a ninguna parte por si misma, porque llevar a un sitio *y*
+ * abrir un submenu son dos respuestas distintas al mismo clic.
+ */
+interface EntradaMenu {
+  ruta: string | null;
   etiqueta: string;
   icono: string;
   roles: readonly Rol[];
+  hijos?: readonly EntradaMenuHija[];
 }
 
-/** Rutas que se muestran sin el shell. */
-const RUTAS_PUBLICAS = ['/login', '/registro', '/cambiar-password'];
+/**
+ * Rutas que se muestran sin el shell: las de acceso y, desde la revision v4, el
+ * area publica, que trae su propia cabecera (`PublicoLayout`). Envolverla tambien
+ * con el shell pintaria dos barras superpuestas a quien tuviera sesion abierta.
+ */
+const RUTAS_PUBLICAS = [
+  '/login',
+  '/registro',
+  '/cambiar-password',
+  '/nuestras-especialidades',
+  '/nuestro-equipo',
+];
+
+/** La portada es la raiz exacta: con `startsWith` casaria con todas las rutas. */
+function esRutaPublica(url: string): boolean {
+  const sinParametros = url.split('?')[0];
+  return sinParametros === '/' || RUTAS_PUBLICAS.some((r) => sinParametros.startsWith(r));
+}
 
 /**
  * Ancho a partir del cual el cajon de navegacion cabe junto al contenido.
@@ -30,6 +59,9 @@ const RUTAS_PUBLICAS = ['/login', '/registro', '/cambiar-password'];
  */
 const ANCHO_ESCRITORIO = '(min-width: 56.25rem)';
 
+// v4: el catalogo clinico ya no es una entrada para los cuatro roles. Sus tres
+// pantallas son de mantenimiento y quedan en la consola de administracion; quien
+// solo quiere consultarlo lo tiene en las paginas publicas, sin sesion siquiera.
 const MENU: readonly EntradaMenu[] = [
   {
     ruta: '/usuarios',
@@ -41,19 +73,19 @@ const MENU: readonly EntradaMenu[] = [
     ruta: '/especialidades',
     etiqueta: 'Especialidades',
     icono: 'medical_services',
-    roles: ['PACIENTE', 'RECEPCIONISTA', 'ODONTOLOGO', 'ADMINISTRADOR'],
+    roles: ['ADMINISTRADOR'],
   },
   {
     ruta: '/tratamientos',
     etiqueta: 'Tratamientos',
     icono: 'healing',
-    roles: ['PACIENTE', 'RECEPCIONISTA', 'ODONTOLOGO', 'ADMINISTRADOR'],
+    roles: ['ADMINISTRADOR'],
   },
   {
     ruta: '/odontologos',
     etiqueta: 'Odontologos',
     icono: 'groups',
-    roles: ['PACIENTE', 'RECEPCIONISTA', 'ODONTOLOGO', 'ADMINISTRADOR'],
+    roles: ['ADMINISTRADOR'],
   },
   {
     ruta: '/bloqueos',
@@ -86,9 +118,19 @@ const MENU: readonly EntradaMenu[] = [
     roles: ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'],
   },
   {
-    ruta: '/mis-citas',
-    etiqueta: 'Mis citas',
+    ruta: null,
+    etiqueta: 'Citas',
     icono: 'event_note',
+    roles: ['PACIENTE'],
+    hijos: [
+      { ruta: '/mis-citas', etiqueta: 'Mis citas' },
+      { ruta: '/mis-citas/historial', etiqueta: 'Historial' },
+    ],
+  },
+  {
+    ruta: '/mis-tratamientos',
+    etiqueta: 'Tratamientos',
+    icono: 'healing',
     roles: ['PACIENTE'],
   },
 ];
@@ -127,7 +169,7 @@ export class App {
 
   /** El shell no envuelve las pantallas de acceso. */
   protected readonly mostrarShell = computed(
-    () => this.estaAutenticado() && !RUTAS_PUBLICAS.some((r) => this.url().startsWith(r)),
+    () => this.estaAutenticado() && !esRutaPublica(this.url()),
   );
 
   /**
@@ -163,6 +205,25 @@ export class App {
         this.cajonAbierto.set(false);
       }
     });
+
+    // Un grupo se abre solo cuando la pantalla actual es de uno de sus hijos, y
+    // nunca se cierra solo: entrar directo al historial —por recarga o por un
+    // enlace— con el grupo plegado dejaria el menu contradiciendo a la pantalla.
+    effect(() => {
+      const actual = this.url();
+      const abrir = MENU.filter((entrada) =>
+        entrada.hijos?.some((hijo) => actual === hijo.ruta || actual.startsWith(hijo.ruta + '/')),
+      );
+      if (abrir.length > 0) {
+        this.gruposAbiertos.update((abiertos) => {
+          const siguiente = new Set(abiertos);
+          for (const entrada of abrir) {
+            siguiente.add(entrada.etiqueta);
+          }
+          return siguiente;
+        });
+      }
+    });
   }
 
   /**
@@ -174,6 +235,33 @@ export class App {
     const rol = this.rol();
     return rol ? MENU.filter((e) => e.roles.includes(rol)) : [];
   });
+
+  /** Grupos desplegados, por etiqueta. Arrancan cerrados. */
+  protected readonly gruposAbiertos = signal<ReadonlySet<string>>(new Set());
+
+  protected estaAbierto(entrada: EntradaMenu): boolean {
+    return this.gruposAbiertos().has(entrada.etiqueta);
+  }
+
+  protected alternarGrupo(entrada: EntradaMenu): void {
+    this.gruposAbiertos.update((abiertos) => {
+      const siguiente = new Set(abiertos);
+      if (!siguiente.delete(entrada.etiqueta)) {
+        siguiente.add(entrada.etiqueta);
+      }
+      return siguiente;
+    });
+  }
+
+  /**
+   * La cabecera del grupo se resalta cuando lo esta uno de sus hijos. No lo hace
+   * `routerLinkActive` porque la cabecera es un boton, no un enlace, y plegado el
+   * grupo no quedaria ni rastro de donde esta el usuario.
+   */
+  protected grupoActivo(entrada: EntradaMenu): boolean {
+    const actual = this.url();
+    return entrada.hijos?.some((hijo) => actual === hijo.ruta) ?? false;
+  }
 
   protected cerrarSesion(): void {
     this.auth.logout();

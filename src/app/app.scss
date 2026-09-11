@@ -17,6 +17,30 @@
   font-weight: 600;
 }
 
+// La cabecera de un grupo es un `button`: sin esto traeria el fondo y el borde
+// del navegador y rompeia la fila de la lista.
+.grupo {
+  width: 100%;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+// Un hijo activo se resalta solo (`[activated]`), pero con el grupo plegado no
+// quedaria rastro de donde esta el usuario; esto lo suple en la cabecera.
+.grupo-activo {
+  font-weight: 600;
+}
+
+// Sangria, y no color, para que se lea como lo que cuelga del grupo: el color
+// solo no distingue nada para quien no lo percibe.
+.hijo {
+  padding-left: 1.5rem;
+}
+
 .barra {
   position: sticky;
   top: 0;

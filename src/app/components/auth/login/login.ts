@@ -6,7 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { mensajeDeError } from '../../../core/http/api-error';
 
@@ -122,6 +122,7 @@ export class Login {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly ruta = inject(ActivatedRoute);
 
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -143,10 +144,11 @@ export class Login {
       next: () => {
         this.enviando.set(false);
         // El backend bloquea todo salvo el cambio de contraseña mientras el
-        // token lleve `requiere_cambio_password`.
+        // token lleve `requiere_cambio_password`, y por eso ese destino manda
+        // incluso sobre lo que el usuario venia a hacer.
         const destino = this.auth.requiereCambioPassword()
           ? '/cambiar-password'
-          : this.auth.rutaInicial();
+          : (this.destinoPedido() ?? this.auth.rutaInicial());
         void this.router.navigateByUrl(destino);
       },
       error: (err: unknown) => {
@@ -154,5 +156,26 @@ export class Login {
         this.error.set(mensajeDeError(err));
       },
     });
+  }
+
+  /**
+   * La pantalla que el usuario pedia cuando la guardia lo desvio aqui (HU-06,
+   * v4): el visitante que pulsa «pedir cita» en el catalogo publico tiene que
+   * volver a su tratamiento, no aterrizar en la portada de su rol.
+   *
+   * Solo se sigue si es una ruta **de esta aplicacion**. Un enlace de fuera
+   * puede traer cualquier `returnUrl`, y seguirlo a ciegas convertiria el login
+   * en un trampolin hacia otro sitio con la credencial recien puesta. `//` y
+   * `/\` empiezan por barra pero el navegador los resuelve como host ajeno, asi
+   * que no basta con mirar el primer caracter.
+   */
+  private destinoPedido(): string | null {
+    const destino = this.ruta.snapshot.queryParamMap.get('returnUrl');
+    // Una barra sola es ruta de aqui; dos barras, o barra y contrabarra, son
+    // un host ajeno que el navegador resolveria fuera de la aplicacion.
+    if (!destino || !/^\/(?![/\\])/.test(destino)) {
+      return null;
+    }
+    return destino;
   }
 }

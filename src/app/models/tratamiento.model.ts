@@ -9,6 +9,8 @@ export interface Tratamiento {
   duracionMinutos: number;
   especialidad: Especialidad;
   activo: boolean;
+  /** RF-09 (v4): ruta de la imagen. Puede faltar; la vista pinta un marcador. */
+  imagenUrl: string | null;
 }
 
 /**
@@ -21,6 +23,7 @@ export interface TratamientoRequest {
   descripcion?: string;
   duracionMinutos: number;
   especialidadId: string;
+  imagenUrl?: string;
 }
 
 /** RN-04: multiplo de 15 minutos, entre 15 y 240. */
