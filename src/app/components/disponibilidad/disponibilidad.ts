@@ -14,8 +14,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { ActivatedRoute } from '@angular/router';
-import { debounceTime, distinctUntilChanged, switchMap, tap } from 'rxjs';
+import { ActivatedRoute, Router } from '@angular/router';
+import { debounceTime, distinctUntilChanged, forkJoin, switchMap, tap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeError } from '../../core/http/api-error';
 import {
@@ -23,19 +23,17 @@ import {
   Cita,
   DIAS_MAXIMOS,
   DisponibilidadResponse,
-  Odontologo,
+  OdontologoPublico,
   Paciente,
-  Tratamiento,
+  TratamientoPublico,
 } from '../../models';
 import { DisponibilidadService } from '../../services/disponibilidad.service';
-import { OdontologoService } from '../../services/odontologo.service';
 import { PacienteService } from '../../services/paciente.service';
 import { PublicoService } from '../../services/publico.service';
-import { TratamientoService } from '../../services/tratamiento.service';
-import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
 import { filtroDeDias, seAtiende } from '../../shared/dias-de-atencion';
 import { BloqueAgrupado, DiaAgrupado, agruparFranjas } from './agrupar-franjas';
 import { CitaReservadaDialogo } from './cita-reservada-dialogo';
+import { IdentificarseDialogo, IdentificarseDialogoDatos } from './identificarse-dialogo';
 import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './reservar-dialogo';
 
 @Component({
@@ -163,6 +161,12 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
             Las citas se reservan con al menos dos horas de antelación, así que las franjas más
             inmediatas no aparecen.
           </p>
+          @if (visitante()) {
+            <p class="nota">
+              Puedes consultar sin cuenta. Para reservar la franja que elijas te pediremos iniciar
+              sesión o registrarte, y volverás a ella sin repetir la búsqueda.
+            </p>
+          }
 
           <div class="acciones">
             <button
@@ -229,7 +233,8 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
                     administracion en nombre de un paciente ya elegido (HU-14).
                     Mientras no se haya elegido a quien, la franja es solo
                     informacion: un boton que devolviera 400 al pulsarlo seria un
-                    fallo de diseno.
+                    fallo de diseno. Para el visitante tambien es un boton: pulsarlo
+                    le pide identificarse y le devuelve a esta misma franja.
                   -->
                   @if (puedeReservar()) {
                     <button
@@ -379,14 +384,25 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
 export class Disponibilidad {
   private readonly fb = inject(FormBuilder);
   private readonly servicio = inject(DisponibilidadService);
-  private readonly tratamientoService = inject(TratamientoService);
-  private readonly odontologoService = inject(OdontologoService);
   private readonly pacienteService = inject(PacienteService);
   private readonly publicoService = inject(PublicoService);
   private readonly dialogo = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly auth = inject(AuthService);
   private readonly ruta = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
+  /**
+   * Quien consulta sin haber iniciado sesion. Ve las mismas franjas que un
+   * paciente, y al pulsar una se le pide identificarse en vez de reservar.
+   */
+  protected readonly visitante = computed(() => !this.auth.estaAutenticado());
+
+  /**
+   * La hora que se eligio antes de identificarse, pendiente de reabrirse cuando
+   * llegue la respuesta de la consulta restaurada desde la URL.
+   */
+  private franjaPendiente: string | null = null;
 
   /**
    * HU-14 · RF-17: recepción y administración reservan en nombre de otro, así que
@@ -407,7 +423,7 @@ export class Disponibilidad {
    * Recepción sin paciente elegido no reserva: el botón daría un 400 al pulsarlo.
    */
   protected readonly puedeReservar = computed(() => {
-    if (this.auth.rol() === 'PACIENTE') {
+    if (this.visitante() || this.auth.rol() === 'PACIENTE') {
       return true;
     }
     return this.reservaParaOtro() && this.pacienteElegido() !== null;
@@ -415,8 +431,11 @@ export class Disponibilidad {
   /** La última reserva de esta sesión, para que su código siga a la vista. */
   protected readonly ultimaReserva = signal<Cita | null>(null);
 
-  protected readonly tratamientos = signal<Tratamiento[]>([]);
-  protected readonly odontologos = signal<Odontologo[]>([]);
+  // Del catalogo publico, con o sin sesion: el visitante no tiene credencial que
+  // mandar a las rutas del catalogo autenticado, y tener dos fuentes seria tener
+  // dos listas que podrian no coincidir. El publico ya solo trae lo activo.
+  protected readonly tratamientos = signal<TratamientoPublico[]>([]);
+  protected readonly odontologos = signal<OdontologoPublico[]>([]);
   protected readonly respuesta = signal<DisponibilidadResponse | null>(null);
   protected readonly consultado = signal(false);
   protected readonly cargando = signal(false);
@@ -473,13 +492,13 @@ export class Disponibilidad {
   );
 
   /** RN-08: los que poseen la especialidad que el tratamiento elegido exige. */
-  protected readonly odontologosAptos = computed<Odontologo[]>(() => {
+  protected readonly odontologosAptos = computed<OdontologoPublico[]>(() => {
     const tratamiento = this.tratamientos().find((t) => t.id === this.tratamientoElegido());
     if (!tratamiento) {
       return [];
     }
     return this.odontologos().filter((o) =>
-      o.especialidades.some((e) => e.id === tratamiento.especialidad.id),
+      o.especialidadIds.includes(tratamiento.especialidadId),
     );
   });
 
@@ -497,21 +516,18 @@ export class Disponibilidad {
   });
 
   constructor() {
-    cargarTodasLasPaginas((pagina) =>
-      this.tratamientoService.listar({ page: pagina, size: 100 }),
-    ).subscribe({
-      next: (lista) => {
-        const activos = lista.filter((t) => t.activo);
-        this.tratamientos.set(activos);
-        this.precargarTratamientoDeLaUrl(activos);
+    // Los dos catalogos llegan juntos porque la busqueda restaurada desde la URL
+    // necesita ambos: con el tratamiento y sin los odontologos, nadie seria apto
+    // todavia y el efecto de mas abajo soltaria al odontologo que se venia a ver.
+    forkJoin({
+      tratamientos: this.publicoService.tratamientos(),
+      odontologos: this.publicoService.odontologos(),
+    }).subscribe({
+      next: ({ tratamientos, odontologos }) => {
+        this.tratamientos.set(tratamientos);
+        this.odontologos.set(odontologos);
+        this.restaurarBusquedaDeLaUrl(tratamientos, odontologos);
       },
-      error: (err: unknown) => this.error.set(mensajeDeError(err)),
-    });
-
-    cargarTodasLasPaginas((pagina) =>
-      this.odontologoService.listar({ page: pagina, size: 100 }),
-    ).subscribe({
-      next: (lista) => this.odontologos.set(lista.filter((o) => o.activo)),
       error: (err: unknown) => this.error.set(mensajeDeError(err)),
     });
 
@@ -618,13 +634,69 @@ export class Disponibilidad {
    * Se ignora en silencio el que no este entre los activos —un tratamiento dado
    * de baja entre que se genero el enlace y se pulso—: la pantalla queda como si
    * nadie hubiera elegido nada, que es exactamente donde puede seguir.
+   *
+   * Tambien se vuelve aqui despues de identificarse, y entonces la URL trae la
+   * busqueda entera —odontologo, dia y la hora elegida—: se rehace la consulta
+   * sola y, al llegar, se reabre esa franja. Es lo que evita al visitante repetir
+   * la busqueda que ya hizo antes de tener cuenta.
    */
-  private precargarTratamientoDeLaUrl(tratamientos: Tratamiento[]): void {
-    const id = this.ruta.snapshot.queryParamMap.get('tratamientoId');
+  private restaurarBusquedaDeLaUrl(
+    tratamientos: TratamientoPublico[],
+    odontologos: OdontologoPublico[],
+  ): void {
+    const query = this.ruta.snapshot.queryParamMap;
+    const id = query.get('tratamientoId');
     if (!id || !tratamientos.some((t) => t.id === id)) {
       return;
     }
     this.formulario.controls.tratamientoId.setValue(id);
+
+    const odontologoId = query.get('odontologoId');
+    if (odontologoId && odontologos.some((o) => o.id === odontologoId)) {
+      this.formulario.controls.odontologoId.setValue(odontologoId);
+    }
+
+    const dia = deIso(query.get('dia'));
+    if (!dia || dia < this.minimoConsultable || dia > this.maximoConsultable) {
+      return;
+    }
+    this.formulario.controls.dia.setValue(dia);
+    this.franjaPendiente = query.get('inicio');
+    this.consultar();
+  }
+
+  /**
+   * La franja que se eligio antes de identificarse, si la consulta restaurada
+   * la sigue ofreciendo. Solo se reabre para quien reserva para si mismo:
+   * recepcion tendria que elegir antes al paciente, y el dialogo sin el daria 400.
+   *
+   * La hora se quita despues de la URL para que recargar la pantalla no vuelva a
+   * abrir el dialogo que ya se cerro.
+   */
+  private reabrirFranjaPendiente(): void {
+    const inicio = this.franjaPendiente;
+    this.franjaPendiente = null;
+    if (!inicio) {
+      return;
+    }
+
+    const fecha = this.formulario.controls.dia.value;
+    const dia = this.dias().find((d) => fecha && d.fecha === aIso(fecha));
+    const bloque = dia?.bloques.find((b) => b.inicio === inicio);
+
+    if (!dia || !bloque) {
+      this.snackBar.open(
+        'La franja que elegiste ya no está disponible. Elige otra de la lista.',
+        'Cerrar',
+        { duration: 8000 },
+      );
+    } else if (!this.visitante() && !this.reservaParaOtro()) {
+      this.abrirReserva(dia, bloque);
+    }
+
+    const url = this.router.parseUrl(this.router.url);
+    delete url.queryParams['inicio'];
+    void this.router.navigateByUrl(url, { replaceUrl: true });
   }
 
   private precargarPacienteDeLaUrl(): void {
@@ -682,8 +754,10 @@ export class Disponibilidad {
           this.respuesta.set(respuesta);
           this.consultado.set(true);
           this.cargando.set(false);
+          this.reabrirFranjaPendiente();
         },
         error: (err: unknown) => {
+          this.franjaPendiente = null;
           this.respuesta.set(null);
           this.consultado.set(true);
           this.cargando.set(false);
@@ -699,6 +773,11 @@ export class Disponibilidad {
   protected abrirReserva(dia: DiaAgrupado, bloque: BloqueAgrupado): void {
     const tratamiento = this.tratamientos().find((t) => t.id === this.tratamientoElegido());
     if (!tratamiento) {
+      return;
+    }
+
+    if (this.visitante()) {
+      this.pedirIdentificacion(dia, bloque);
       return;
     }
 
@@ -745,6 +824,27 @@ export class Disponibilidad {
       });
   }
 
+  /**
+   * Sin cuenta no se reserva, pero la eleccion no se pierde: la busqueda entera
+   * y la hora viajan en el `returnUrl`, y el login —directo o despues del
+   * registro— devuelve aqui con ellas.
+   */
+  private pedirIdentificacion(dia: DiaAgrupado, bloque: BloqueAgrupado): void {
+    const valores = this.formulario.getRawValue();
+    const returnUrl = this.router
+      .createUrlTree(['/disponibilidad'], {
+        queryParams: {
+          tratamientoId: valores.tratamientoId,
+          odontologoId: valores.odontologoId || undefined,
+          dia: dia.fecha,
+          inicio: bloque.inicio,
+        },
+      })
+      .toString();
+    const datos: IdentificarseDialogoDatos = { returnUrl };
+    this.dialogo.open(IdentificarseDialogo, { data: datos });
+  }
+
   /** El botón necesita decir a dónde lleva, no solo la hora. */
   protected etiquetaAccesible(dia: DiaAgrupado, bloque: BloqueAgrupado): string {
     return `Reservar el ${dia.fecha} a las ${bloque.inicio} con ${this.nombres(bloque)}`;
@@ -784,4 +884,18 @@ function aIso(fecha: Date): string {
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   const dia = String(fecha.getDate()).padStart(2, '0');
   return `${fecha.getFullYear()}-${mes}-${dia}`;
+}
+
+/**
+ * El camino inverso, para el dia que llega en la URL: medianoche local, por la
+ * misma razon que `aIso` no pasa por UTC. Lo que no sea una fecha real queda en
+ * `null`, y la pantalla lo ignora como si no se hubiera indicado.
+ */
+function deIso(texto: string | null): Date | null {
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto ?? '');
+  if (!partes) {
+    return null;
+  }
+  const fecha = new Date(Number(partes[1]), Number(partes[2]) - 1, Number(partes[3]));
+  return aIso(fecha) === texto ? fecha : null;
 }

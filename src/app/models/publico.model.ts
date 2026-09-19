@@ -51,6 +51,11 @@ export interface OdontologoPublico {
   cop: string;
   imagenUrl: string | null;
   especialidades: string[];
+  /**
+   * Las mismas, por identificador: la consulta de franjas filtra por el de la
+   * especialidad del tratamiento, y el nombre lo puede reescribir el administrador.
+   */
+  especialidadIds: string[];
 }
 
 /** Respuesta de `EspecialidadDetalleDTO`. */

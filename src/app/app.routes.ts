@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { passwordGuard } from './core/auth/password.guard';
 import { misHorariosGuard } from './components/horario/mis-horarios.guard';
 import { rolGuard } from './core/auth/rol.guard';
+import { sinSesionGuard } from './core/auth/sin-sesion.guard';
 
 const TODOS = ['PACIENTE', 'RECEPCIONISTA', 'ODONTOLOGO', 'ADMINISTRADOR'] as const;
 const AGENDA = ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'] as const;
@@ -77,6 +78,17 @@ export const routes: Routes = [
         path: 'nuestro-equipo',
         loadComponent: () =>
           import('./components/publico/odontologos-publicos').then((m) => m.OdontologosPublicos),
+      },
+      // La consulta de franjas sin cuenta. Es la misma URL y la misma pantalla
+      // que la del portal, declarada dos veces: esta solo casa sin sesion y la
+      // envuelve el marco publico; con sesion no casa, el enrutador sigue y
+      // encuentra la de mas abajo, dentro del shell y con sus guardas. Asi el
+      // `returnUrl` que deja el visitante vale tal cual despues de entrar.
+      {
+        path: 'disponibilidad',
+        canMatch: [sinSesionGuard],
+        loadComponent: () =>
+          import('./components/disponibilidad/disponibilidad').then((m) => m.Disponibilidad),
       },
     ],
   },

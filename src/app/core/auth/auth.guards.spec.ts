@@ -2,7 +2,9 @@ import { inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import {
   ActivatedRouteSnapshot,
+  Route,
   RouterStateSnapshot,
+  UrlSegment,
   UrlTree,
   provideRouter,
 } from '@angular/router';
@@ -10,6 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AuthService } from './auth.service';
 import { passwordGuard } from './password.guard';
 import { rolGuard } from './rol.guard';
+import { sinSesionGuard } from './sin-sesion.guard';
 
 /**
  * Los guards son la unica barrera de navegacion del cliente, y reflejan reglas
@@ -169,5 +172,30 @@ describe('AuthService', () => {
     const ruta = TestBed.runInInjectionContext(() => inject(AuthService).rutaInicial());
 
     expect(ruta).toBe('/perfil');
+  });
+});
+
+describe('sinSesionGuard', () => {
+  function casa(): boolean {
+    return TestBed.runInInjectionContext(() =>
+      sinSesionGuard({} as Route, [] as UrlSegment[], {} as Parameters<typeof sinSesionGuard>[2]),
+    ) as boolean;
+  }
+
+  it('casa sin sesion: el visitante recibe la version publica de la pantalla', () => {
+    conSesion(null);
+    expect(casa()).toBe(true);
+  });
+
+  it('no casa con sesion, para que el enrutador siga hasta la del shell', () => {
+    conSesion(sesion('PACIENTE'));
+    expect(casa()).toBe(false);
+  });
+
+  it('un token caducado cuenta como sin sesion', () => {
+    conSesion(
+      tokenCon({ iss: 'dentalcite', rol: 'PACIENTE', exp: Math.floor(Date.now() / 1000) - 60 }),
+    );
+    expect(casa()).toBe(true);
   });
 });

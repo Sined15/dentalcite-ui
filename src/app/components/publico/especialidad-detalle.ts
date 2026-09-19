@@ -19,8 +19,8 @@ import { PublicoService } from '../../services/publico.service';
  * Cada tratamiento lleva su «pedir cita», que es el ultimo criterio de HU-06. El
  * destino es la pantalla de disponibilidad con el tratamiento ya elegido, y no un
  * formulario propio: la reserva vive en un solo sitio (HU-09, HU-14) y tenerla
- * dos veces seria mantenerla dos veces. Al visitante lo desviara al login la
- * guardia de esa ruta, que le devuelve aqui mismo despues de entrar.
+ * dos veces seria mantenerla dos veces. El visitante la consulta sin cuenta, y
+ * solo se le pide identificarse al elegir una franja, que le espera al volver.
  */
 @Component({
   selector: 'app-especialidad-detalle',

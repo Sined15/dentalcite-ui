@@ -48,6 +48,7 @@ const ODONTOLOGOS: OdontologoPublico[] = [
     cop: 'COP-10001',
     imagenUrl: '/img/catalogo/odontologo-cop-10001.svg',
     especialidades: ['Odontología General', 'Ortodoncia'],
+    especialidadIds: ['esp-1', 'esp-2'],
   },
 ];
 
@@ -209,5 +210,17 @@ describe('PublicoLayout', () => {
     expect(contenido).toContain('Iniciar sesión');
     expect(contenido).toContain('Registrarse');
     expect(contenido).not.toContain('Ir a mi cuenta');
+  });
+
+  it('lleva a la consulta de franjas sin pedir cuenta', async () => {
+    localStorage.clear();
+    const { fixture } = await montar(PublicoLayout);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const enlace = (fixture.nativeElement as HTMLElement).querySelector(
+      'nav a[href="/disponibilidad"]',
+    );
+    expect(enlace?.textContent?.trim()).toBe('Pedir cita');
   });
 });

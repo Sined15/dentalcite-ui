@@ -8,7 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { mensajeDeError } from '../../../core/http/api-error';
 import { TIPOS_DOCUMENTO, TipoDocumento } from '../../../models';
@@ -135,7 +135,9 @@ const VERSION_CONSENTIMIENTO = '1.0';
         </mat-card-content>
 
         <mat-card-actions>
-          <a mat-button routerLink="/login">Ya tengo cuenta</a>
+          <a mat-button routerLink="/login" [queryParams]="{ returnUrl: destinoPedido }"
+            >Ya tengo cuenta</a
+          >
         </mat-card-actions>
       </mat-card>
     </div>
@@ -182,6 +184,14 @@ export class Registro {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly ruta = inject(ActivatedRoute);
+
+  /**
+   * La pantalla a la que se queria llegar antes de crear la cuenta, que se pasa
+   * tal cual al login. No se valida aqui: el registro no navega a ella, y el
+   * login ya descarta cualquier destino que no sea de esta aplicacion.
+   */
+  protected readonly destinoPedido = this.ruta.snapshot.queryParamMap.get('returnUrl');
 
   protected readonly tiposDocumento = TIPOS_DOCUMENTO;
   protected readonly versionConsentimiento = VERSION_CONSENTIMIENTO;
@@ -220,7 +230,10 @@ export class Registro {
           this.snackBar.open('Cuenta creada. Ya puedes iniciar sesión.', 'Cerrar', {
             duration: 5000,
           });
-          void this.router.navigate(['/login']);
+          // El registro no abre sesion: el camino de vuelta sigue por el login.
+          void this.router.navigate(['/login'], {
+            queryParams: { returnUrl: this.destinoPedido },
+          });
         },
         error: (err: unknown) => {
           this.enviando.set(false);

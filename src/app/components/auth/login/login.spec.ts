@@ -115,3 +115,45 @@ describe('Login', () => {
     expect(router.url).toBe('/usuarios');
   });
 });
+
+describe('Login · camino al registro', () => {
+  afterEach(() => localStorage.clear());
+
+  function enlaceAlRegistro(returnUrl: string | null): string | null {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [Login],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter(RUTAS),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap(returnUrl ? { returnUrl } : {}) },
+          },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(Login);
+    fixture.detectChanges();
+    const raiz = fixture.nativeElement as HTMLElement;
+    return raiz.querySelector('a[href^="/registro"]')?.getAttribute('href') ?? null;
+  }
+
+  it('el enlace al registro conserva el destino pedido', () => {
+    // Quien aun no tiene cuenta tiene que volver igualmente a la franja que eligio.
+    const href = enlaceAlRegistro('/disponibilidad?tratamientoId=tra-1&inicio=09:30');
+    const destino = new URL(href ?? '', 'http://x').searchParams.get('returnUrl');
+    expect(destino).toBe('/disponibilidad?tratamientoId=tra-1&inicio=09:30');
+  });
+
+  it('no inventa un destino si no se pidio ninguno', () => {
+    expect(enlaceAlRegistro(null)).toBe('/registro');
+  });
+
+  it('tampoco propaga un destino ajeno a la aplicacion', () => {
+    expect(enlaceAlRegistro('https://ejemplo.invalido/robar')).toBe('/registro');
+  });
+});

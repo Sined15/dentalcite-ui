@@ -10,79 +10,52 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { environment } from '../../../environments/environment';
-import { PageResponse } from '../../core/http/api.types';
 import {
   CalendarioPublico,
   Cita,
   DisponibilidadResponse,
-  Especialidad,
-  Odontologo,
+  OdontologoPublico,
   Paciente,
-  Tratamiento,
+  TratamientoPublico,
 } from '../../models';
 import { Disponibilidad } from './disponibilidad';
-import { ReservarResultado } from './reservar-dialogo';
+import { IdentificarseDialogo } from './identificarse-dialogo';
+import { ReservarDialogo, ReservarResultado } from './reservar-dialogo';
 
 const API = `${environment.apiUrl}/api/v1/disponibilidad`;
-const API_TRATAMIENTOS = `${environment.apiUrl}/api/v1/tratamientos`;
-const API_ODONTOLOGOS = `${environment.apiUrl}/api/v1/odontologos`;
+// El catalogo sale de las rutas publicas para todos: el visitante no tiene
+// credencial que mandar a las del catalogo autenticado.
+const API_TRATAMIENTOS = `${environment.apiUrl}/api/v1/publico/tratamientos`;
+const API_ODONTOLOGOS = `${environment.apiUrl}/api/v1/publico/odontologos`;
 const API_CALENDARIO = `${environment.apiUrl}/api/v1/publico/calendario`;
 
-const ENDODONCIA: Especialidad = {
-  id: 'esp-1',
-  nombre: 'ENDODONCIA',
-  descripcion: null,
-  activo: true,
-  imagenUrl: null,
-};
-const ORTODONCIA: Especialidad = {
-  id: 'esp-2',
-  nombre: 'ORTODONCIA',
-  descripcion: null,
-  activo: true,
-  imagenUrl: null,
-};
-
-const TRATAMIENTOS: Tratamiento[] = [
+const TRATAMIENTOS: TratamientoPublico[] = [
   {
     id: 'tra-1',
-    codigo: 'T-001',
     nombre: 'Endodoncia',
     descripcion: null,
     duracionMinutos: 30,
-    especialidad: ENDODONCIA,
-    activo: true,
     imagenUrl: null,
-  },
-  {
-    id: 'tra-2',
-    codigo: 'T-002',
-    nombre: 'Tratamiento retirado',
-    descripcion: null,
-    duracionMinutos: 30,
-    especialidad: ENDODONCIA,
-    activo: false,
-    imagenUrl: null,
+    especialidadId: 'esp-1',
+    especialidadNombre: 'ENDODONCIA',
   },
 ];
 
-function odontologo(id: string, nombres: string, especialidades: Especialidad[]): Odontologo {
+function odontologo(id: string, nombres: string, especialidadIds: string[]): OdontologoPublico {
   return {
     id,
     cop: `COP-${id}`,
     nombres,
     apellidos: 'Apellido',
-    fichaId: `fic-${id}`,
-    activo: true,
     imagenUrl: null,
-    especialidades,
+    especialidades: [],
+    especialidadIds,
   };
 }
 
-const ODONTOLOGOS: Odontologo[] = [
-  odontologo('odo-1', 'Juan', [ENDODONCIA]),
-  odontologo('odo-2', 'Ana', [ORTODONCIA]),
-  { ...odontologo('odo-3', 'Baja', [ENDODONCIA]), activo: false },
+const ODONTOLOGOS: OdontologoPublico[] = [
+  odontologo('odo-1', 'Juan', ['esp-1']),
+  odontologo('odo-2', 'Ana', ['esp-2']),
 ];
 
 /**
@@ -98,20 +71,6 @@ const CALENDARIO: CalendarioPublico = {
     { odontologoId: 'odo-2', dias: [1, 2, 3, 4, 5, 6] },
   ],
 };
-
-function pagina<T>(content: T[]): PageResponse<T> {
-  return {
-    content,
-    totalElements: content.length,
-    totalPages: 1,
-    number: 0,
-    size: 100,
-    first: true,
-    last: true,
-    numberOfElements: content.length,
-    empty: content.length === 0,
-  };
-}
 
 /** Lo que devuelve el motor: granularidad de quince minutos (RN-04). */
 const RESPUESTA: DisponibilidadResponse = {
@@ -204,8 +163,9 @@ interface Interno {
       dia: { hasError: (codigo: string) => boolean };
     };
   };
-  odontologosAptos: () => Odontologo[];
-  tratamientos: () => Tratamiento[];
+  odontologosAptos: () => OdontologoPublico[];
+  tratamientos: () => TratamientoPublico[];
+  visitante: () => boolean;
   dias: () => {
     fecha: string;
     bloques: { inicio: string; inicios: string[]; odontologos: unknown[] }[];
@@ -252,14 +212,17 @@ describe('Disponibilidad', () => {
 
   // Lo que devuelve `ReservarDialogo` al cerrarse, no una cita suelta: la
   // pantalla distingue «reservada» de «recarga esto» por la forma del objeto.
+  // `rol` nulo es el visitante: sin token guardado.
   async function montarComo(
-    rol: string,
+    rol: string | null,
     cierraCon: ReservarResultado | null = { cita: CITA },
     query: Record<string, string> = {},
   ): Promise<void> {
     TestBed.resetTestingModule();
     localStorage.clear();
-    localStorage.setItem('dentalcite.token', sesionCon(rol));
+    if (rol) {
+      localStorage.setItem('dentalcite.token', sesionCon(rol));
+    }
     // El overlay de Material no aporta nada aqui: interesa que el flujo de
     // reserva encadene bien, no como se pinta el dialogo (eso es su propio spec).
     abiertos.length = 0;
@@ -294,8 +257,8 @@ describe('Disponibilidad', () => {
 
     // El componente carga los dos catalogos en el constructor, y pregunta que
     // dias abre la clinica para no ofrecer un domingo que no tiene franjas.
-    httpMock.expectOne((r) => r.url === API_TRATAMIENTOS).flush(pagina(TRATAMIENTOS));
-    httpMock.expectOne((r) => r.url === API_ODONTOLOGOS).flush(pagina(ODONTOLOGOS));
+    httpMock.expectOne(API_TRATAMIENTOS).flush(TRATAMIENTOS);
+    httpMock.expectOne(API_ODONTOLOGOS).flush(ODONTOLOGOS);
     httpMock.expectOne(API_CALENDARIO).flush(CALENDARIO);
     await fixture.whenStable();
   }
@@ -305,7 +268,9 @@ describe('Disponibilidad', () => {
     await montarComo('PACIENTE');
   });
 
-  it('descarta del selector los tratamientos dados de baja', () => {
+  it('lee los tratamientos del catalogo publico', () => {
+    // `montarComo` ya exige las peticiones a /publico: si la pantalla pidiera el
+    // catalogo autenticado, `expectOne` fallaria antes de llegar aqui.
     expect(componente.tratamientos().map((t) => t.id)).toEqual(['tra-1']);
   });
 
@@ -329,8 +294,8 @@ describe('Disponibilidad', () => {
   });
 
   it('ignora un tratamientoId que no esta entre los activos', async () => {
-    // `tra-2` esta dado de baja: dejarlo elegido pondria en el desplegable un
-    // identificador sin etiqueta que mostrar.
+    // `tra-2` no viene en el catalogo publico, que solo trae los activos: dejarlo
+    // elegido pondria en el desplegable un identificador sin etiqueta que mostrar.
     await montarComo('PACIENTE', { cita: CITA }, { tratamientoId: 'tra-2' });
 
     expect(componente.formulario.controls.tratamientoId.value).toBe('');
@@ -340,7 +305,7 @@ describe('Disponibilidad', () => {
     componente.formulario.patchValue({ tratamientoId: 'tra-1' });
     await fixture.whenStable();
 
-    // Ana es de ortodoncia y el tercero esta de baja: queda Juan.
+    // Ana es de ortodoncia: queda Juan.
     expect(componente.odontologosAptos().map((o) => o.id)).toEqual(['odo-1']);
   });
 
@@ -660,5 +625,116 @@ describe('Disponibilidad', () => {
     const admite = componente.soloDiasConAtencion();
     expect(admite(new Date(2026, 9, 12))).toBe(true);
     expect(admite(new Date(2026, 9, 13))).toBe(false);
+  });
+
+  // ------------------------------------------------------------------
+  // Consulta sin sesion
+  // ------------------------------------------------------------------
+
+  /** La respuesta del motor para un dia concreto de la ventana. */
+  function respuestaPara(fecha: Date): DisponibilidadResponse {
+    return {
+      ...RESPUESTA,
+      desde: iso(fecha),
+      hasta: iso(fecha),
+      odontologos: [
+        {
+          ...RESPUESTA.odontologos[0],
+          dias: [{ fecha: iso(fecha), inicios: ['09:00:00', '09:15:00', '09:30:00'] }],
+        },
+      ],
+    };
+  }
+
+  it('el visitante consulta sin sesion y ve las franjas como botones', async () => {
+    await montarComo(null);
+    await consultarConResultado();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(componente.visitante()).toBe(true);
+    expect(componente.puedeReservar()).toBe(true);
+    expect(raiz.querySelectorAll('button.franja').length).toBeGreaterThan(0);
+  });
+
+  it('al elegir una franja sin sesion pide identificarse, con la busqueda en el returnUrl', async () => {
+    await montarComo(null);
+    await consultarConResultado();
+
+    componente.abrirReserva(componente.dias()[0], componente.dias()[0].bloques[1]);
+    await fixture.whenStable();
+
+    // No se abre la reserva: sin cuenta no hay para quien.
+    expect(abiertos).toEqual([IdentificarseDialogo]);
+    const { returnUrl } = datosAbiertos[0] as { returnUrl: string };
+    expect(returnUrl).toContain('/disponibilidad?');
+    expect(returnUrl).toContain('tratamientoId=tra-1');
+    expect(returnUrl).toContain('dia=2026-09-14');
+    expect(returnUrl).toContain('inicio=09:30');
+    // «Cualquier odontologo» no viaja: vacio no significa lo mismo que ausente.
+    expect(returnUrl).not.toContain('odontologoId');
+  });
+
+  it('al volver con la busqueda en la URL consulta sola y reabre la franja elegida', async () => {
+    const suyo = primerDiaQueAtiende([1, 3, 5]);
+    await montarComo(
+      'PACIENTE',
+      { cita: CITA },
+      { tratamientoId: 'tra-1', odontologoId: 'odo-1', dia: iso(suyo), inicio: '09:00' },
+    );
+
+    // Nadie ha pulsado «Consultar»: la busqueda es la que se hizo sin cuenta.
+    const req = httpMock.expectOne((r) => r.url === API);
+    expect(req.request.params.get('odontologoId')).toBe('odo-1');
+    expect(req.request.params.get('desde')).toBe(iso(suyo));
+    req.flush(respuestaPara(suyo));
+    await fixture.whenStable();
+
+    expect(abiertos[0]).toBe(ReservarDialogo);
+    const datos = datosAbiertos[0] as { fecha: string; bloque: { inicio: string } };
+    expect(datos.fecha).toBe(iso(suyo));
+    expect(datos.bloque.inicio).toBe('09:00');
+
+    // Reservada, se recalcula como en cualquier otra reserva.
+    httpMock.expectOne((r) => r.url === API).flush({ ...RESPUESTA, odontologos: [] });
+  });
+
+  it('si la franja elegida ya no se ofrece al volver, avisa y no abre la reserva', async () => {
+    const suyo = primerDiaQueAtiende([1, 3, 5]);
+    await montarComo(
+      'PACIENTE',
+      { cita: CITA },
+      { tratamientoId: 'tra-1', dia: iso(suyo), inicio: '11:00' },
+    );
+    const abrirAviso = vi.spyOn(TestBed.inject(MatSnackBar), 'open');
+
+    httpMock.expectOne((r) => r.url === API).flush(respuestaPara(suyo));
+    await fixture.whenStable();
+
+    expect(abrirAviso).toHaveBeenCalled();
+    expect(abiertos).toHaveLength(0);
+    // La lista actual sigue a la vista para elegir otra.
+    expect(componente.dias()[0].bloques.length).toBeGreaterThan(0);
+  });
+
+  it('recepcion que vuelve con la franja en la URL no abre la reserva sin paciente', async () => {
+    const suyo = primerDiaQueAtiende([1, 3, 5]);
+    await montarComo(
+      'RECEPCIONISTA',
+      { cita: CITA },
+      { tratamientoId: 'tra-1', dia: iso(suyo), inicio: '09:00' },
+    );
+
+    httpMock.expectOne((r) => r.url === API).flush(respuestaPara(suyo));
+    await fixture.whenStable();
+
+    // Sin paciente elegido el servidor responderia 400.
+    expect(abiertos).toHaveLength(0);
+  });
+
+  it('ignora un dia de la URL fuera de la ventana consultable', async () => {
+    await montarComo('PACIENTE', { cita: CITA }, { tratamientoId: 'tra-1', dia: iso(hoyMas(30)) });
+
+    expect(componente.formulario.controls.tratamientoId.value).toBe('tra-1');
+    httpMock.expectNone((r) => r.url === API);
   });
 });

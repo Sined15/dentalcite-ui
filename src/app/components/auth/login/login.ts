@@ -84,7 +84,13 @@ import { mensajeDeError } from '../../../core/http/api-error';
         </mat-card-content>
 
         <mat-card-actions>
-          <a mat-button routerLink="/registro">Registrarme como paciente</a>
+          <!--
+            El destino pedido acompaña al registro: quien aun no tiene cuenta
+            vuelve despues a la franja que eligio, no a su pantalla inicial.
+          -->
+          <a mat-button routerLink="/registro" [queryParams]="{ returnUrl: destinoPedido() }"
+            >Registrarme como paciente</a
+          >
         </mat-card-actions>
       </mat-card>
     </div>
@@ -169,7 +175,7 @@ export class Login {
    * `/\` empiezan por barra pero el navegador los resuelve como host ajeno, asi
    * que no basta con mirar el primer caracter.
    */
-  private destinoPedido(): string | null {
+  protected destinoPedido(): string | null {
     const destino = this.ruta.snapshot.queryParamMap.get('returnUrl');
     // Una barra sola es ruta de aqui; dos barras, o barra y contrabarra, son
     // un host ajeno que el navegador resolveria fuera de la aplicacion.

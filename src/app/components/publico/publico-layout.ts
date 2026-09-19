@@ -42,6 +42,7 @@ import { AuthService } from '../../core/auth/auth.service';
         >
         <a routerLink="/nuestras-especialidades" routerLinkActive="activo">Especialidades</a>
         <a routerLink="/nuestro-equipo" routerLinkActive="activo">Equipo</a>
+        <a routerLink="/disponibilidad" routerLinkActive="activo">Pedir cita</a>
       </nav>
     </header>
 
