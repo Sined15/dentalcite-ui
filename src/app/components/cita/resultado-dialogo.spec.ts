@@ -6,7 +6,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { environment } from '../../../environments/environment';
 import { Cita, CitaResumen } from '../../models';
-import { ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
+import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
 
 const API = `${environment.apiUrl}/api/v1/citas`;
 
@@ -102,14 +102,15 @@ describe('ResultadoDialogo', () => {
     req.flush(CERRADA);
   });
 
-  it('al registrar cierra el dialogo diciendo que si', () => {
+  it('al registrar cierra el dialogo con la cita que devuelve el servidor', () => {
+    // Quien lo abrio necesita saber si la cita ha ocupado una sesion para decirlo.
     montar();
     componente.resultado = 'ATENDIDA';
 
     componente.registrar();
     httpMock.expectOne(`${API}/cita-1/resultado`).flush(CERRADA);
 
-    expect(cerrar).toHaveBeenCalledWith(true);
+    expect(cerrar).toHaveBeenCalledWith(CERRADA);
   });
 
   it('ante un 409 muestra el motivo y no cierra el dialogo', () => {
@@ -133,5 +134,22 @@ describe('ResultadoDialogo', () => {
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(texto).toContain('CIT-000123');
     expect(texto).toContain('Julio Ramos');
+  });
+});
+
+describe('avisoDeResultado', () => {
+  it('si la cita ha ocupado una sesion, dice cual y de que plan', () => {
+    const conSesion: Cita = {
+      ...CERRADA,
+      sesionEnlazada: { planId: 'plan-1', numero: 2, tratamiento: 'Endodoncia' },
+    };
+
+    expect(avisoDeResultado(conSesion)).toBe(
+      'Resultado de CIT-000123 registrado. Ocupa la sesión 2 de su plan de Endodoncia.',
+    );
+  });
+
+  it('si no ha ocupado ninguna, no habla de planes', () => {
+    expect(avisoDeResultado(CERRADA)).toBe('Resultado de CIT-000123 registrado.');
   });
 });

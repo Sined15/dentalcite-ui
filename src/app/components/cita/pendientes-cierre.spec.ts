@@ -5,12 +5,13 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../core/http/api.types';
-import { CitaResumen } from '../../models';
+import { Cita, CitaResumen } from '../../models';
 import { PendientesCierre } from './pendientes-cierre';
 
 const API = `${environment.apiUrl}/api/v1/citas/pendientes-cierre`;
@@ -32,6 +33,23 @@ function cita(id: string): CitaResumen {
     odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
     tratamiento: { id: 'tra-1', nombre: 'Endodoncia' },
     consultorio: { id: 'con-1', nombre: 'Consultorio 2' },
+  };
+}
+
+/** Lo que devuelve el servidor al registrar el resultado de esa cita. */
+function cerrada(id: string, sesionEnlazada?: Cita['sesionEnlazada']): Cita {
+  return {
+    id,
+    codigo: `CIT-00000${id.slice(-1)}`,
+    fecha: '2026-09-01',
+    hora: '09:00:00',
+    duracionMinutos: 30,
+    zonaHoraria: 'America/Lima',
+    estado: 'ATENDIDA',
+    tratamiento: { id: 'tra-1', nombre: 'Endodoncia' },
+    odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
+    consultorio: { id: 'con-1', nombre: 'Consultorio 2' },
+    ...(sesionEnlazada ? { sesionEnlazada } : {}),
   };
 }
 
@@ -59,10 +77,13 @@ describe('PendientesCierre', () => {
   let httpMock: HttpTestingController;
   let componente: Interno;
   const abiertos: unknown[] = [];
+  const avisos = vi.fn();
 
-  async function montar(citas: CitaResumen[], cierraCon = true): Promise<void> {
+  /** @param cierraCon lo que devuelve el dialogo: la cita cerrada, o `false` si se cancela. */
+  async function montar(citas: CitaResumen[], cierraCon: Cita | false = cerrada('c-1')): Promise<void> {
     TestBed.resetTestingModule();
     abiertos.length = 0;
+    avisos.mockClear();
     const dialogoDoble = {
       open: (comp: unknown, config?: { data?: unknown }) => {
         abiertos.push(config?.data);
@@ -78,6 +99,7 @@ describe('PendientesCierre', () => {
         provideHttpClientTesting(),
         { provide: LOCALE_ID, useValue: 'es-PE' },
         { provide: MatDialog, useValue: dialogoDoble },
+        { provide: MatSnackBar, useValue: { open: avisos } },
       ],
     });
     httpMock = TestBed.inject(HttpTestingController);
@@ -138,5 +160,34 @@ describe('PendientesCierre', () => {
     await fixture.whenStable();
 
     httpMock.verify();
+  });
+
+  it('tras registrar avisa de la sesion del plan que ha ocupado la cita', async () => {
+    await montar(
+      [cita('c-1')],
+      cerrada('c-1', { planId: 'plan-1', numero: 2, tratamiento: 'Endodoncia' }),
+    );
+
+    componente.registrar(componente.citas()[0]);
+    await fixture.whenStable();
+    httpMock.expectOne((r) => r.url === API).flush(pagina([]));
+
+    expect(avisos).toHaveBeenCalledWith(
+      'Resultado de CIT-000001 registrado. Ocupa la sesión 2 de su plan de Endodoncia.',
+      'Cerrar',
+      { duration: 6000 },
+    );
+  });
+
+  it('si la cita no ha ocupado ninguna sesion, el aviso no habla de planes', async () => {
+    await montar([cita('c-1')]);
+
+    componente.registrar(componente.citas()[0]);
+    await fixture.whenStable();
+    httpMock.expectOne((r) => r.url === API).flush(pagina([]));
+
+    expect(avisos).toHaveBeenCalledWith('Resultado de CIT-000001 registrado.', 'Cerrar', {
+      duration: 6000,
+    });
   });
 });

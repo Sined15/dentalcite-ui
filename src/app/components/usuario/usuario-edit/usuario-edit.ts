@@ -1,6 +1,5 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -10,9 +9,18 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { mensajeDeError } from '../../../core/http/api-error';
-import { ROLES, Rol, TIPOS_DOCUMENTO, TipoDocumento, Usuario } from '../../../models';
+import {
+  ROLES,
+  ROLES_DEL_ALTA_DE_CUENTA,
+  Rol,
+  TIPOS_DOCUMENTO,
+  TipoDocumento,
+  Usuario,
+} from '../../../models';
+import { PacienteService } from '../../../services/paciente.service';
 import { UsuarioService } from '../../../services/usuario.service';
 import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
 
@@ -20,6 +28,7 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
   selector: 'app-usuario-edit',
   imports: [
     ReactiveFormsModule,
+    RouterLink,
     MatButtonModule,
     MatCardModule,
     MatCheckboxModule,
@@ -37,6 +46,21 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
       }
       <mat-card-content>
         <form [formGroup]="formulario" (ngSubmit)="enviar()">
+          @if (!esEdicion()) {
+            <!--
+              Esta pantalla reparte credenciales; no da de alta personas. Quien
+              tiene expediente clinico nace donde se recogen los datos que su rol
+              exige, y su cuenta sale de ahi.
+            -->
+            <p class="aviso">
+              Aquí se reparten credenciales. Al odontólogo se le registra en
+              <a routerLink="/odontologos/nuevo">Odontólogos</a>, con su colegiatura y sus
+              especialidades, y su cuenta se crea ahí mismo. Al paciente se le da de alta en
+              <a routerLink="/pacientes/nuevo">Pacientes</a>, con su consentimiento; su cuenta
+              se crea aquí, después, para que pueda entrar al portal.
+            </p>
+          }
+
           <mat-form-field appearance="outline">
             <mat-label>Nombre</mat-label>
             <input matInput formControlName="nombre" />
@@ -58,10 +82,16 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
             </mat-form-field>
           }
 
+          <!--
+            En alta faltan los odontologos, que se dan de alta con su registro
+            profesional en su propio menu. En edicion estan los cuatro, porque
+            cambiar el rol de una cuenta que ya existe es cosa del administrador, y
+            es lo que permite ascender a odontologo a quien ya tenia cuenta.
+          -->
           <mat-form-field appearance="outline">
             <mat-label>Rol</mat-label>
             <mat-select formControlName="rol">
-              @for (rol of roles; track rol) {
+              @for (rol of rolesOfrecidos; track rol) {
                 <mat-option [value]="rol">{{ rol }}</mat-option>
               }
             </mat-select>
@@ -70,45 +100,49 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
             }
           </mat-form-field>
 
-          @if (!esEdicion()) {
+          @if (esAltaDePaciente()) {
             <!--
-              RN-10: el documento crea o vincula la ficha de la persona. La
-              regla condicional la aplica el servicio, no Bean Validation:
-              omitirlo en un alta ODONTOLOGO devuelve 400.
+              La cuenta del paciente se levanta sobre la ficha que ya tiene, y el
+              documento es lo que la encuentra. Sin ficha la cuenta no puede
+              reservar —el servidor responde 403—, que es lo unico que el paciente
+              iba a hacer con ella.
             -->
-            @if (esOdontologo()) {
-              <p class="aviso">
-                El rol ODONTOLOGO necesita tipo y numero de documento: de ahi sale la ficha que
-                despues exige su registro como odontologo (RF-10, RN-11).
-              </p>
-            }
+            <p class="nota">
+              Da acceso al portal a un paciente que ya está registrado. Si todavía no lo está,
+              regístralo primero en <a routerLink="/pacientes/nuevo">Pacientes</a>, con su
+              consentimiento.
+            </p>
 
             <div class="fila">
               <mat-form-field appearance="outline">
                 <mat-label>Tipo de documento</mat-label>
                 <mat-select formControlName="tipoDocumento">
-                  <mat-option [value]="''">Sin documento</mat-option>
                   @for (tipo of tiposDocumento; track tipo) {
                     <mat-option [value]="tipo">{{ tipo }}</mat-option>
                   }
                 </mat-select>
-                @if (formulario.controls.tipoDocumento.hasError('required')) {
-                  <mat-error>Obligatorio para el rol ODONTOLOGO</mat-error>
-                }
               </mat-form-field>
 
               <mat-form-field appearance="outline">
                 <mat-label>Número de documento</mat-label>
                 <input matInput formControlName="documento" />
+                <mat-hint>El del paciente al que se le da la cuenta</mat-hint>
                 @if (formulario.controls.documento.hasError('required')) {
-                  <mat-error>Obligatorio para el rol ODONTOLOGO</mat-error>
+                  <mat-error>El documento es obligatorio</mat-error>
                 }
               </mat-form-field>
             </div>
+          }
 
+          @if (!esEdicion()) {
             <mat-form-field appearance="outline">
               <mat-label>Contraseña provisional (opcional)</mat-label>
-              <input matInput type="text" formControlName="passwordProvisional" autocomplete="off" />
+              <input
+                matInput
+                type="text"
+                formControlName="passwordProvisional"
+                autocomplete="off"
+              />
               <mat-hint>Si la dejas vacia, el sistema la genera y la muestra una sola vez</mat-hint>
               @if (formulario.controls.passwordProvisional.hasError('minlength')) {
                 <mat-error>Debe tener al menos 8 caracteres</mat-error>
@@ -176,7 +210,7 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
       padding: 0.75rem 1rem;
       border-radius: 0.5rem;
       font-size: 0.875rem;
-      margin: 0 0 0.5rem;
+      margin: 0 0 1rem;
     }
     .nota {
       font-size: 0.8125rem;
@@ -188,6 +222,7 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
 export class UsuarioEdit {
   private readonly fb = inject(FormBuilder);
   private readonly servicio = inject(UsuarioService);
+  private readonly pacienteService = inject(PacienteService);
   private readonly ruta = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly snackBar = inject(MatSnackBar);
@@ -195,7 +230,7 @@ export class UsuarioEdit {
 
   private readonly id = this.ruta.snapshot.paramMap.get('id');
 
-  protected readonly roles = ROLES;
+  protected readonly rolesOfrecidos = this.id === null ? ROLES_DEL_ALTA_DE_CUENTA : ROLES;
   protected readonly tiposDocumento = TIPOS_DOCUMENTO;
 
   protected readonly esEdicion = signal(this.id !== null);
@@ -205,8 +240,8 @@ export class UsuarioEdit {
   protected readonly formulario = this.fb.nonNullable.group({
     nombre: ['', [Validators.required]],
     correo: ['', [Validators.required, Validators.email]],
-    rol: ['PACIENTE' as Rol, [Validators.required]],
-    tipoDocumento: ['' as TipoDocumento | ''],
+    rol: ['RECEPCIONISTA' as Rol, [Validators.required]],
+    tipoDocumento: ['DNI' as TipoDocumento],
     documento: [''],
     passwordProvisional: ['', [Validators.minLength(8)]],
     activo: [true],
@@ -216,12 +251,27 @@ export class UsuarioEdit {
     initialValue: this.formulario.controls.rol.value,
   });
 
-  protected readonly esOdontologo = signal(false);
+  protected readonly esAltaDePaciente = computed(
+    () => !this.esEdicion() && this.rolSeleccionado() === 'PACIENTE',
+  );
 
   constructor() {
+    // El documento solo se pide —y solo se exige— para la cuenta del paciente:
+    // recepcion y administracion no tienen expediente clinico, y crearles una
+    // ficha dejaba en el padron un paciente sin nombre.
+    effect(() => {
+      const doc = this.formulario.controls.documento;
+      if (this.esAltaDePaciente()) {
+        doc.addValidators(Validators.required);
+      } else {
+        doc.removeValidators(Validators.required);
+      }
+      doc.updateValueAndValidity({ emitEvent: false });
+    });
+
     if (this.id) {
-      // En edicion, correo y documento no se envian: el PUT solo reemplaza
-      // nombre, rol y estado.
+      // En edicion el correo no se envia: el PUT solo reemplaza nombre, rol y
+      // estado.
       this.formulario.controls.correo.disable();
       this.formulario.controls.tipoDocumento.disable();
       this.formulario.controls.documento.disable();
@@ -230,29 +280,6 @@ export class UsuarioEdit {
     } else {
       this.formulario.controls.activo.disable();
     }
-
-    // El documento pasa a obligatorio cuando el rol elegido es ODONTOLOGO.
-    effect(() => {
-      const esOdo = this.rolSeleccionado() === 'ODONTOLOGO';
-      this.esOdontologo.set(esOdo);
-
-      if (this.esEdicion()) {
-        return;
-      }
-
-      const tipo = this.formulario.controls.tipoDocumento;
-      const doc = this.formulario.controls.documento;
-
-      if (esOdo) {
-        tipo.addValidators(Validators.required);
-        doc.addValidators(Validators.required);
-      } else {
-        tipo.removeValidators(Validators.required);
-        doc.removeValidators(Validators.required);
-      }
-      tipo.updateValueAndValidity({ emitEvent: false });
-      doc.updateValueAndValidity({ emitEvent: false });
-    });
   }
 
   private cargarParaEdicion(): void {
@@ -317,13 +344,74 @@ export class UsuarioEdit {
       return;
     }
 
+    if (this.esAltaDePaciente()) {
+      this.crearCuentaDePaciente();
+      return;
+    }
+
+    // Recepcion y administracion van sin documento: nada en el sistema las
+    // resuelve por su ficha, y la que se creaba nacia sin nombres y se colaba en
+    // el padron como un paciente identificado solo por su numero de historia.
+    this.crearCuenta();
+  }
+
+  /**
+   * La cuenta del paciente se comprueba contra el padron antes de crearla.
+   *
+   * <p>El administrador la crea para que el paciente entre al portal, y para eso
+   * la cuenta necesita ficha: sin ella no puede reservar. Mandar el documento a
+   * ciegas tambien sirve —el servidor vincula la ficha si existe—, pero cuando no
+   * existe la crea sin nombres ni consentimiento, y entonces la cuenta es de
+   * alguien que no esta registrado como paciente. Buscarlo primero convierte ese
+   * caso en un aviso que dice donde registrarlo.
+   */
+  private crearCuentaDePaciente(): void {
+    const valores = this.formulario.getRawValue();
+    const documento = valores.documento.trim();
+
+    this.pacienteService.buscar(documento, { page: 0, size: 5 }).subscribe({
+      next: (respuesta) => {
+        const ficha = respuesta.content.find((p) => p.documento === documento);
+
+        if (!ficha) {
+          this.cargando.set(false);
+          this.error.set(
+            'No hay ningún paciente con ese documento. Regístralo primero en Pacientes, con su' +
+              ' consentimiento, y vuelve a crear su cuenta.',
+          );
+          return;
+        }
+        if (ficha.tieneCuenta) {
+          this.cargando.set(false);
+          const quien = `${ficha.apellidos ?? ''}, ${ficha.nombres ?? ''}`.trim();
+          this.error.set(`${quien} ya tiene cuenta; una ficha no admite dos.`);
+          return;
+        }
+
+        this.crearCuenta();
+      },
+      error: (err: unknown) => {
+        this.cargando.set(false);
+        this.error.set(mensajeDeError(err));
+      },
+    });
+  }
+
+  /**
+   * El alta en si. El documento viaja solo en la cuenta del paciente, que es la
+   * unica que se levanta sobre una ficha.
+   */
+  private crearCuenta(): void {
+    const valores = this.formulario.getRawValue();
+    const deUnPaciente = this.esAltaDePaciente();
+
     this.servicio
       .crear({
         nombre: valores.nombre,
         correo: valores.correo,
         rol: valores.rol,
-        tipoDocumento: valores.tipoDocumento || undefined,
-        documento: valores.documento || undefined,
+        tipoDocumento: deUnPaciente ? valores.tipoDocumento : undefined,
+        documento: deUnPaciente ? valores.documento.trim() : undefined,
         passwordProvisional: valores.passwordProvisional || undefined,
       })
       .subscribe({

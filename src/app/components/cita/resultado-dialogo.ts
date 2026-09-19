@@ -4,11 +4,24 @@ import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatRadioModule } from '@angular/material/radio';
 import { mensajeDeError } from '../../core/http/api-error';
-import { CitaResumen, ResultadoCita } from '../../models';
+import { Cita, CitaResumen, ResultadoCita } from '../../models';
 import { CitaService } from '../../services/cita.service';
 
 export interface ResultadoDialogoDatos {
   cita: CitaResumen;
+}
+
+/**
+ * El aviso que sigue a registrar un resultado. Vive junto al diálogo porque lo
+ * usan las dos pantallas que lo abren, y con dos copias acabarían diciendo cosas
+ * distintas de la misma cita.
+ */
+export function avisoDeResultado(cerrada: Cita): string {
+  const aviso = `Resultado de ${cerrada.codigo} registrado.`;
+  const sesion = cerrada.sesionEnlazada;
+  return sesion
+    ? `${aviso} Ocupa la sesión ${sesion.numero} de su plan de ${sesion.tratamiento}.`
+    : aviso;
 }
 
 /**
@@ -119,7 +132,9 @@ export class ResultadoDialogo {
     this.error.set(null);
 
     this.servicio.registrarResultado(this.datos.cita.id, this.resultado).subscribe({
-      next: () => this.dialogRef.close(true),
+      // Se cierra con la cita que devuelve el servidor y no con un «sí»: quien
+      // abrió el diálogo necesita saber si ha ocupado una sesión para decirlo.
+      next: (cerrada) => this.dialogRef.close(cerrada),
       error: (err: unknown) => {
         // El 409 —ya tiene resultado, o todavia no ha terminado— se muestra aqui
         // y no cierra el dialogo: quien opera necesita leer por que no se pudo, y

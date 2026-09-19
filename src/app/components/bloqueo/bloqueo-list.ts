@@ -12,8 +12,12 @@ import { MatTableModule } from '@angular/material/table';
 import { Router, RouterLink } from '@angular/router';
 import { mensajeDeError } from '../../core/http/api-error';
 import { Bloqueo } from '../../models';
+import { AuthService } from '../../core/auth/auth.service';
 import { BloqueoService } from '../../services/bloqueo.service';
+import { OdontologoService } from '../../services/odontologo.service';
+import { UsuarioService } from '../../services/usuario.service';
 import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo';
+import { miOdontologo } from '../../shared/mi-odontologo';
 
 @Component({
   selector: 'app-bloqueo-list',
@@ -84,26 +88,35 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
           <td mat-cell *matCellDef="let fila">{{ fila.fechaFin | date: 'short' }}</td>
         </ng-container>
 
+        <!--
+          El bloqueo ajeno se ve pero no se toca. Que un odontologo sepa que su
+          colega esta fuera es util y el servidor se lo devuelve; editarlo o
+          borrarlo le da 403, asi que los botones solo salen sobre lo suyo.
+        -->
         <ng-container matColumnDef="acciones">
           <th mat-header-cell *matHeaderCellDef class="col-acciones">Acciones</th>
           <td mat-cell *matCellDef="let fila" class="col-acciones">
-            <button
-              mat-icon-button
-              type="button"
-              (click)="editar(fila)"
-              [attr.aria-label]="'Editar el bloqueo ' + fila.motivo"
-            >
-              <mat-icon>edit</mat-icon>
-            </button>
-            <button
-              mat-icon-button
-              type="button"
-              color="warn"
-              (click)="eliminar(fila)"
-              [attr.aria-label]="'Eliminar el bloqueo ' + fila.motivo"
-            >
-              <mat-icon>delete</mat-icon>
-            </button>
+            @if (puedeGestionar(fila)) {
+              <button
+                mat-icon-button
+                type="button"
+                (click)="editar(fila)"
+                [attr.aria-label]="'Editar el bloqueo ' + fila.motivo"
+              >
+                <mat-icon>edit</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                type="button"
+                color="warn"
+                (click)="eliminar(fila)"
+                [attr.aria-label]="'Eliminar el bloqueo ' + fila.motivo"
+              >
+                <mat-icon>delete</mat-icon>
+              </button>
+            } @else {
+              <span class="ajeno" aria-hidden="true">—</span>
+            }
           </td>
         </ng-container>
 
@@ -126,23 +139,8 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
     />
   `,
   styles: `
-    .cabecera {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 1rem;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin: 0;
-    }
     .filtro {
       width: min(100%, 26rem);
-    }
-    .tabla-scroll {
-      overflow-x: auto;
     }
     table {
       width: 100%;
@@ -166,6 +164,9 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
       padding: 1.5rem 0;
       opacity: 0.7;
     }
+    .ajeno {
+      opacity: 0.5;
+    }
   `,
 })
 export class BloqueoList {
@@ -173,8 +174,14 @@ export class BloqueoList {
   private readonly dialogo = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
+  private readonly usuarioService = inject(UsuarioService);
+  private readonly odontologoService = inject(OdontologoService);
 
   protected readonly columnas = ['ambito', 'motivo', 'inicio', 'fin', 'acciones'];
+
+  /** Su propio registro, cuando quien mira es un odontologo. */
+  private readonly miOdontologoId = signal<string | null>(null);
 
   private readonly datos = signal<Bloqueo[]>([]);
   protected readonly cargando = signal(false);
@@ -204,6 +211,25 @@ export class BloqueoList {
 
   constructor() {
     this.cargar();
+    if (this.auth.rol() === 'ODONTOLOGO') {
+      miOdontologo(this.usuarioService, this.odontologoService).subscribe((mio) =>
+        this.miOdontologoId.set(mio?.id ?? null),
+      );
+    }
+  }
+
+  /**
+   * Quien puede editar o retirar este bloqueo. Recepción y administración,
+   * cualquiera; el odontólogo, solo los de su propia agenda —nunca los de un
+   * consultorio, que tampoco puede registrar—. Mientras su registro no se ha
+   * resuelto no se ofrece ninguno: es preferible a ofrecer uno de más.
+   */
+  protected puedeGestionar(fila: Bloqueo): boolean {
+    if (this.auth.rol() !== 'ODONTOLOGO') {
+      return true;
+    }
+    const mio = this.miOdontologoId();
+    return mio !== null && fila.odontologoId === mio;
   }
 
   protected cargar(): void {

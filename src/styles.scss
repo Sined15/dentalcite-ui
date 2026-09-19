@@ -65,10 +65,49 @@ video {
   height: auto;
 }
 
+// --- Cromo de pantalla -----------------------------------------------------
+// Cada pantalla con cabecera y tabla repetia estas mismas reglas en su propio
+// bloque `styles`, con divergencias de orden y algun olvido. Declaradas una vez,
+// las cuatro areas —portal del paciente, recepcion, consulta del odontologo y
+// administracion— se ven iguales por construccion y no por disciplina.
+//
+// Un componente que necesite otra cosa la declara y gana sin mas: los estilos
+// de componente llevan el atributo de encapsulacion, asi que pesan mas que
+// estos. Es lo que conserva la cabecera del area publica y la de horarios,
+// que alinea abajo a proposito.
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.cabecera h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+// --- Dias sin atencion -----------------------------------------------------
+// El calendario de reservar los deshabilita y Material ya los apaga solo. Los de
+// rango -la agenda, los bloqueos- los dejan elegibles a proposito, asi que hace
+// falta distinguirlos a la vista: el domingo se puede marcar como extremo de un
+// rango, pero conviene que se note que ese dia no se atiende.
+//
+// La regla es global y no del componente porque el calendario se dibuja en una
+// capa aparte, fuera del arbol del componente, donde su encapsulacion no llega.
+.mat-calendar-body-cell.dia-cerrado .mat-calendar-body-cell-content {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
 // Las tablas de Material llevan un ancho minimo para que sus columnas quepan;
 // el contenedor que las envuelve es el que desplaza, y en tactil conviene que
 // lo haga con inercia y sin quedarse a medias entre dos columnas.
 .tabla-scroll {
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
 }

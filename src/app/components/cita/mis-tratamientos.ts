@@ -6,8 +6,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { mensajeDeError } from '../../core/http/api-error';
-import { CitaResumen } from '../../models';
+import { CitaResumen, Plan } from '../../models';
 import { CitaService } from '../../services/cita.service';
+import { PlanService } from '../../services/plan.service';
+import { UsuarioService } from '../../services/usuario.service';
 import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
 import { agruparTratamientosRecibidos } from './agrupar-tratamientos-recibidos';
 
@@ -18,10 +20,13 @@ import { agruparTratamientosRecibidos } from './agrupar-tratamientos-recibidos';
  * mantenerlo, en `/tratamientos`, que es de administración—: aquí solo está lo
  * que a esta persona le han hecho.
  *
- * <p><strong>Sale de sus citas atendidas</strong>, porque es lo único que la API
- * le deja leer de lo suyo: no alcanza sus planes de tratamiento (403) y no hay
- * notas clínicas. Una sesión es una cita atendida. La agrupación vive aparte, en
- * `agrupar-tratamientos-recibidos`, para poder probarla sin montar la pantalla.
+ * <p><strong>Sale de sus citas atendidas.</strong> Una sesión es una cita atendida,
+ * y la agrupación vive aparte, en `agrupar-tratamientos-recibidos`, para poder
+ * probarla sin montar la pantalla.
+ *
+ * <p>Debajo van sus planes de tratamiento, que ahora sí puede leer: de cada sesión
+ * cerrada, qué cuidados le indicaron y cuándo volver. No lleva el avance como cifra
+ * ni línea de tiempo, que es lo que trae su propia historia.
  *
  * <p>No se anuncian especialidad ni duración: el resumen de la cita trae del
  * tratamiento solo su identificador y su nombre, y pedirlos al catálogo sería
@@ -76,20 +81,66 @@ import { agruparTratamientosRecibidos } from './agrupar-tratamientos-recibidos';
         }
       </ul>
     }
+
+    @if (errorPlanes(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    @if (planes().length > 0) {
+      <h2 class="titulo-planes">Mis planes de tratamiento</h2>
+      <ul class="lista">
+        @for (plan of planes(); track plan.id) {
+          <li>
+            <mat-card>
+              <mat-card-content>
+                <h3>{{ plan.tratamiento.nombre }}</h3>
+                <p class="cuando">
+                  {{ plan.sesionesPrevistas }}
+                  {{ plan.sesionesPrevistas === 1 ? 'sesión prevista' : 'sesiones previstas' }}
+                  · {{ plan.activo ? 'En curso' : 'Suspendido' }}
+                </p>
+                <p class="quien">Con {{ plan.odontologo.nombre }}</p>
+
+                <ol class="mis-sesiones" [attr.aria-label]="'Sesiones de ' + plan.tratamiento.nombre">
+                  @for (sesion of plan.sesiones; track sesion.id) {
+                    <li>
+                      <span class="numero">Sesión {{ sesion.numero }}</span>
+                      @if (sesion.cita; as cita) {
+                        <span class="cuando">{{ cita.inicio | date: 'd MMM y' }}</span>
+                      } @else {
+                        <span class="cuando">Pendiente</span>
+                      }
+
+                      <!--
+                        Lo que le indicaron al terminar. Solo aparece en las
+                        cerradas: en las demas no hay nada que decir todavia.
+                      -->
+                      @if (sesion.recomendaciones.length > 0) {
+                        <ul class="indicado">
+                          @for (cuidado of sesion.recomendaciones; track cuidado.id) {
+                            <li>{{ cuidado.descripcion }}</li>
+                          }
+                        </ul>
+                      }
+                      @if (sesion.proximoControl; as control) {
+                        <span class="cuando">
+                          Próximo control: {{ control | date: 'd MMM y' }}
+                        </span>
+                      }
+                      @if (sesion.observacion; as nota) {
+                        <span class="cuando">{{ nota }}</span>
+                      }
+                    </li>
+                  }
+                </ol>
+              </mat-card-content>
+            </mat-card>
+          </li>
+        }
+      </ul>
+    }
   `,
   styles: `
-    .cabecera {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-    h1 {
-      margin: 0;
-      font-size: 1.5rem;
-    }
     .lista {
       list-style: none;
       margin: 0;
@@ -101,6 +152,34 @@ import { agruparTratamientosRecibidos } from './agrupar-tratamientos-recibidos';
     h2 {
       margin: 0 0 0.5rem;
       font-size: 1.0625rem;
+    }
+    h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.0625rem;
+    }
+    .titulo-planes {
+      margin: 1.5rem 0 0.75rem;
+    }
+    .mis-sesiones {
+      margin: 0.5rem 0 0;
+      padding-left: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.875rem;
+    }
+    .mis-sesiones .numero {
+      font-weight: 600;
+      display: block;
+    }
+    .mis-sesiones .cuando {
+      display: block;
+    }
+    /* Los cuidados indicados, uno por linea: encadenados no se leen. */
+    .indicado {
+      margin: 0.25rem 0;
+      padding-left: 1rem;
+      font-size: 0.8125rem;
     }
     .sesiones {
       display: flex;
@@ -134,8 +213,12 @@ import { agruparTratamientosRecibidos } from './agrupar-tratamientos-recibidos';
 })
 export class MisTratamientos {
   private readonly servicio = inject(CitaService);
+  private readonly usuarioService = inject(UsuarioService);
+  private readonly planService = inject(PlanService);
 
   protected readonly citas = signal<CitaResumen[]>([]);
+  protected readonly planes = signal<Plan[]>([]);
+  protected readonly errorPlanes = signal<string | null>(null);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
 
@@ -143,6 +226,30 @@ export class MisTratamientos {
 
   constructor() {
     this.cargar();
+    this.cargarPlanes();
+  }
+
+  /**
+   * Los planes se piden por ficha y el paciente no la lleva en el token, así que
+   * sale de su propia cuenta. Un error aquí no vacía la pantalla: los tratamientos
+   * recibidos salen de otra consulta y siguen siendo legibles.
+   */
+  private cargarPlanes(): void {
+    this.usuarioService.obtenerPerfilPropio().subscribe({
+      next: (usuario) => {
+        if (!usuario.fichaId) {
+          return;
+        }
+        this.planService.deFicha(usuario.fichaId).subscribe({
+          next: (planes) => this.planes.set(planes),
+          error: (err: unknown) => {
+            this.planes.set([]);
+            this.errorPlanes.set(mensajeDeError(err));
+          },
+        });
+      },
+      error: (err: unknown) => this.errorPlanes.set(mensajeDeError(err)),
+    });
   }
 
   protected cargar(): void {

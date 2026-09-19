@@ -50,9 +50,6 @@ export interface DisponibilidadQuery {
  */
 export const DIAS_MAXIMOS = 14;
 
-/** RN-04: el motor recorre el horario en incrementos de quince minutos. */
-export const PASO_MOTOR_MINUTOS = 15;
-
 /**
  * RN-04, criterio de aceptacion del portal: «la interfaz las agrupara en pasos
  * de treinta minutos para no fragmentar la eleccion». La granularidad fina la

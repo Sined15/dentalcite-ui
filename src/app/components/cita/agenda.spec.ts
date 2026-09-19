@@ -10,11 +10,12 @@ import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../core/http/api.types';
-import { CitaResumen, Especialidad, Odontologo } from '../../models';
+import { CalendarioPublico, CitaResumen, Especialidad, Odontologo } from '../../models';
 import { Agenda } from './agenda';
 
 const API = `${environment.apiUrl}/api/v1/citas`;
 const API_ODONTOLOGOS = `${environment.apiUrl}/api/v1/odontologos`;
+const API_CALENDARIO = `${environment.apiUrl}/api/v1/publico/calendario`;
 
 registerLocaleData(localeEsPe);
 
@@ -90,9 +91,39 @@ function pagina<T>(content: T[], totalElements = content.length): PageResponse<T
   };
 }
 
+/** JWT sin firmar: solo se decodifica el payload, como en auth.guards.spec.ts. */
+function sesionCon(rol: string): string {
+  const b64 = (o: unknown) =>
+    btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${b64({ alg: 'HS256' })}.${b64({
+    iss: 'dentalcite',
+    sub: 'a13d43f3-8930-4f00-baf2-70d492be76b2',
+    rol,
+    requiere_cambio_password: false,
+    exp: Math.floor(Date.now() / 1000) + 8 * 3600,
+  })}.firma`;
+}
+
+/** El calendario trabaja con fechas, no con cadenas: "2026-10-12" a medianoche local. */
+function dia(iso: string): Date {
+  const [anio, mes, numero] = iso.split('-').map(Number);
+  return new Date(anio, mes - 1, numero);
+}
+
+/**
+ * Lo que responde el calendario publico: la clinica abre de lunes a sabado y
+ * cierra el domingo. Aqui solo hace falta que llegue: que el domingo salga
+ * atenuado se prueba en `dias-de-atencion.spec.ts`, sobre el predicado.
+ */
+const CALENDARIO: CalendarioPublico = {
+  diasDeAtencion: [1, 2, 3, 4, 5, 6],
+  feriados: ['2026-07-28'],
+  porOdontologo: [{ odontologoId: 'odo-1', dias: [1, 3, 5] }],
+};
+
 interface Interno {
   formulario: {
-    patchValue: (valores: Record<string, string>) => void;
+    patchValue: (valores: Record<string, string | Date>) => void;
     hasError: (codigo: string) => boolean;
     invalid: boolean;
   };
@@ -107,6 +138,8 @@ interface Interno {
   pendienteDeCierre: (cita: CitaResumen) => boolean;
   error: () => string | null;
   etiquetaEstado: (estado: CitaResumen['estado']) => string;
+  esOdontologo: boolean;
+  columnas: string[];
 }
 
 describe('Agenda', () => {
@@ -143,8 +176,36 @@ describe('Agenda', () => {
     fixture = TestBed.createComponent(Agenda);
     componente = fixture.componentInstance as unknown as Interno;
 
-    // El constructor carga el catalogo de odontologos y consulta la agenda de hoy.
+    // El constructor carga el catalogo de odontologos, pregunta que dias abre la
+    // clinica y consulta la agenda de hoy.
     httpMock.expectOne((r) => r.url === API_ODONTOLOGOS).flush(pagina(ODONTOLOGOS));
+    httpMock.expectOne(API_CALENDARIO).flush(CALENDARIO);
+  }
+
+  /**
+   * La sesion se deja puesta **antes** de crear el componente: el ambito se
+   * decide en su construccion, no al consultar.
+   */
+  function montarComoOdontologo(): void {
+    localStorage.setItem('dentalcite.token', sesionCon('ODONTOLOGO'));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [Agenda],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: LOCALE_ID, useValue: 'es-PE' },
+        { provide: MatDialog, useValue: { open: () => ({ afterClosed: () => of(true) }) } },
+      ],
+    });
+    httpMock = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(Agenda);
+    componente = fixture.componentInstance as unknown as Interno;
+
+    // El calendario se pide igual: los dias cerrados se atenuan para todos.
+    httpMock.expectOne(API_CALENDARIO).flush(CALENDARIO);
   }
 
   beforeEach(() => montar());
@@ -175,7 +236,7 @@ describe('Agenda', () => {
     httpMock.expectOne((r) => r.url === API).flush(pagina([]));
     await fixture.whenStable();
 
-    componente.formulario.patchValue({ desde: '2026-10-12', hasta: '2026-10-12' });
+    componente.formulario.patchValue({ desde: dia('2026-10-12'), hasta: dia('2026-10-12') });
     componente.consultar();
 
     const req = httpMock.expectOne((r) => r.url === API);
@@ -190,8 +251,8 @@ describe('Agenda', () => {
     await fixture.whenStable();
 
     componente.formulario.patchValue({
-      desde: '2026-10-12',
-      hasta: '2026-10-14',
+      desde: dia('2026-10-12'),
+      hasta: dia('2026-10-14'),
       odontologoId: 'odo-1',
       estado: 'CANCELADA',
     });
@@ -209,7 +270,7 @@ describe('Agenda', () => {
     httpMock.expectOne((r) => r.url === API).flush(pagina([]));
     await fixture.whenStable();
 
-    componente.formulario.patchValue({ desde: '2026-10-14', hasta: '2026-10-12' });
+    componente.formulario.patchValue({ desde: dia('2026-10-14'), hasta: dia('2026-10-12') });
     expect(componente.formulario.hasError('rangoInvertido')).toBe(true);
 
     componente.consultar();
@@ -371,5 +432,45 @@ describe('Agenda', () => {
     const botones = raiz.querySelectorAll('button[aria-label^="Registrar el resultado"]');
     expect(botones).toHaveLength(1);
     expect(botones[0].getAttribute('aria-label')).toContain('CIT-000001');
+  });
+
+  // ------------------------------------------------------------------
+  // El odontologo y las suyas
+  // ------------------------------------------------------------------
+
+  it('como odontologo no pide el catalogo de odontologos', async () => {
+    montarComoOdontologo();
+
+    // Sin desplegable que llenar, esa consulta seria trabajo tirado. Si se
+    // pidiera, el expectOne de la agenda fallaria por la peticion sobrante.
+    httpMock.expectOne((r) => r.url === API).flush(pagina([]));
+    await fixture.whenStable();
+
+    httpMock.verify();
+    expect(componente.esOdontologo).toBe(true);
+  });
+
+  it('como odontologo no pinta el filtro por odontologo', async () => {
+    montarComoOdontologo();
+    httpMock.expectOne((r) => r.url === API).flush(pagina([cita('c-1', '09:00:00')]));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // El servidor le devuelve las suyas y descarta el filtro: ofrecerlo
+    // prometeria algo que no puede cumplir.
+    const raiz = fixture.nativeElement as HTMLElement;
+    const etiquetas = [...raiz.querySelectorAll('mat-label')].map((e) => e.textContent?.trim());
+    expect(etiquetas).not.toContain('Odontólogo');
+    expect(componente.columnas).not.toContain('odontologo');
+  });
+
+  it('como odontologo la pantalla se titula «Mi agenda»', async () => {
+    montarComoOdontologo();
+    httpMock.expectOne((r) => r.url === API).flush(pagina([]));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const titulo = (fixture.nativeElement as HTMLElement).querySelector('h1');
+    expect(titulo?.textContent?.trim()).toBe('Mi agenda');
   });
 });

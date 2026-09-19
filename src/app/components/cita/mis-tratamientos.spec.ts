@@ -7,11 +7,46 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { environment } from '../../../environments/environment';
-import { CitaResumen } from '../../models';
+import { CitaResumen, Plan } from '../../models';
 import { cita, pagina } from './citas.testing';
 import { MisTratamientos } from './mis-tratamientos';
 
 const API = `${environment.apiUrl}/api/v1/citas/mias`;
+const API_PERFIL = `${environment.apiUrl}/api/v1/usuarios/me`;
+const API_PLANES = `${environment.apiUrl}/api/v1/planes`;
+const FICHA = 'fic-1';
+
+/** Un plan con su primera sesión ya cerrada: la que trae lo que le indicaron. */
+const PLAN: Plan = {
+  id: 'plan-1',
+  paciente: { id: FICHA, nombre: 'Ramos, Julio' },
+  tratamiento: { id: 'tra-1', nombre: 'Ortodoncia' },
+  odontologo: { id: 'odo-1', nombre: 'Luis Pérez' },
+  sesionesPrevistas: 3,
+  activo: true,
+  motivoSuspension: null,
+  creadoEn: '2026-09-01T09:00:00Z',
+  sesiones: [
+    {
+      id: 'ses-1',
+      numero: 1,
+      estado: 'CERRADA',
+      cita: { id: 'c-1', codigo: 'CIT-000123', inicio: '2026-09-12T14:00:00Z' },
+      recomendaciones: [{ id: 'rec-1', descripcion: 'Mantener dieta blanda' }],
+      proximoControl: '2026-10-15',
+      observacion: 'Volver antes si hay dolor',
+    },
+    {
+      id: 'ses-2',
+      numero: 2,
+      estado: 'PENDIENTE',
+      cita: null,
+      recomendaciones: [],
+      proximoControl: null,
+      observacion: null,
+    },
+  ],
+};
 const ENDODONCIA = { id: 'tra-1', nombre: 'Endodoncia unirradicular' };
 const PROFILAXIS = { id: 'tra-2', nombre: 'Profilaxis dental' };
 
@@ -37,9 +72,18 @@ describe('MisTratamientos', () => {
     fixture = TestBed.createComponent(MisTratamientos);
   }
 
-  async function montar(citas: CitaResumen[]): Promise<void> {
+  /** La ficha sale de la propia cuenta: el token no la lleva. */
+  function resolverPlanes(planes: Plan[]): void {
+    httpMock.expectOne(API_PERFIL).flush({ id: 'usu-1', rol: 'PACIENTE', fichaId: FICHA });
+    const req = httpMock.expectOne((r) => r.url === API_PLANES);
+    expect(req.request.params.get('pacienteId')).toBe(FICHA);
+    req.flush(planes);
+  }
+
+  async function montar(citas: CitaResumen[], planes: Plan[] = []): Promise<void> {
     levantar();
     httpMock.expectOne((r) => r.url === API).flush(pagina(citas));
+    resolverPlanes(planes);
     await fixture.whenStable();
     fixture.detectChanges();
   }
@@ -101,6 +145,48 @@ describe('MisTratamientos', () => {
 
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
       'Todavía no has recibido ningún tratamiento',
+    );
+  });
+
+  // ------------------------------------------------------------------
+  // Lo que le indicaron al cerrar cada sesión
+  // ------------------------------------------------------------------
+
+  it('muestra de cada sesion cerrada sus recomendaciones y el proximo control', async () => {
+    await montar([], [PLAN]);
+
+    const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(texto).toContain('Ortodoncia');
+    expect(texto).toContain('Mantener dieta blanda');
+    expect(texto).toContain('Próximo control');
+    expect(texto).toContain('Volver antes si hay dolor');
+    // La que sigue pendiente no promete nada todavía.
+    expect(texto).toContain('Pendiente');
+  });
+
+  it('sin planes no pinta la seccion', async () => {
+    await montar([], []);
+
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      'Mis planes de tratamiento',
+    );
+  });
+
+  it('si los planes fallan, los tratamientos recibidos siguen legibles', async () => {
+    // Son dos consultas distintas: que una se caiga no puede vaciar la pantalla.
+    levantar();
+    httpMock
+      .expectOne((r) => r.url === API)
+      .flush(pagina([cita({ id: 'c-1', dias: -3, estado: 'ATENDIDA', tratamiento: ENDODONCIA })]));
+    httpMock.expectOne(API_PERFIL).flush({ id: 'usu-1', rol: 'PACIENTE', fichaId: FICHA });
+    httpMock
+      .expectOne((r) => r.url === API_PLANES)
+      .flush({ message: 'Vaya' }, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Endodoncia unirradicular',
     );
   });
 });

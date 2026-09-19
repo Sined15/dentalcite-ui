@@ -6,6 +6,25 @@
  * publica no manda.
  */
 
+/**
+ * Respuesta de `CalendarioPublicoDTO`: que dias abre la clinica.
+ *
+ * `diasDeAtencion` va de 1 (lunes) a 7 (domingo), como lo guarda el horario. Es
+ * la union de lo que declara cada odontologo: el dia que no declara nadie es el
+ * dia en que la clinica cierra.
+ */
+export interface CalendarioPublico {
+  diasDeAtencion: number[];
+  /** "YYYY-MM-DD". Dias sin atencion aunque caigan en dia laborable. */
+  feriados: string[];
+  porOdontologo: DiasDeOdontologo[];
+}
+
+export interface DiasDeOdontologo {
+  odontologoId: string;
+  dias: number[];
+}
+
 /** Respuesta de `EspecialidadPublicaDTO`: imagen y nombre, nada mas. */
 export interface EspecialidadPublica {
   id: string;

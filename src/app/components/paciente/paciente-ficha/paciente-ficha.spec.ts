@@ -81,7 +81,56 @@ const PLAN: Plan = {
     id: `ses-${numero}`,
     numero,
     estado: 'PENDIENTE' as const,
+    cita: null,
+    recomendaciones: [],
+    proximoControl: null,
+    observacion: null,
   })),
+};
+
+const URL_PERFIL = `${environment.apiUrl}/api/v1/usuarios/me`;
+const URL_ODONTOLOGOS = `${environment.apiUrl}/api/v1/odontologos`;
+
+/** La ficha que comparten la cuenta y el registro del odontólogo que firma el plan. */
+const FICHA_DEL_AUTOR = 'fic-odo-1';
+
+function paginaCon(content: unknown[]): Record<string, unknown> {
+  return {
+    content,
+    totalElements: content.length,
+    totalPages: 1,
+    number: 0,
+    size: 100,
+    first: true,
+    last: true,
+    numberOfElements: content.length,
+    empty: content.length === 0,
+  };
+}
+
+/**
+ * Resuelve «yo» a un registro de odontólogo, que es lo que decide si se ofrece
+ * cerrar una sesión: de la cuenta sale la ficha y de la ficha el registro.
+ */
+function resolverMiRegistro(httpMock: HttpTestingController, fichaDeLaCuenta: string): void {
+  httpMock.expectOne(URL_PERFIL).flush({ id: 'usu-1', rol: 'ODONTOLOGO', fichaId: fichaDeLaCuenta });
+  httpMock
+    .expectOne((r) => r.url === URL_ODONTOLOGOS)
+    .flush(paginaCon([{ id: 'odo-1', fichaId: FICHA_DEL_AUTOR, activo: true }]));
+}
+
+/** El plan con su primera sesión ya atendida: la única que se puede cerrar. */
+const CON_UNA_ATENDIDA: Plan = {
+  ...PLAN,
+  sesiones: PLAN.sesiones.map((s) =>
+    s.numero === 1
+      ? {
+          ...s,
+          estado: 'ATENDIDA' as const,
+          cita: { id: 'c1', codigo: 'CIT-000123', inicio: '2026-09-12T14:00:00Z' },
+        }
+      : s,
+  ),
 };
 
 /**
@@ -245,5 +294,90 @@ describe('PacienteFicha', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
       'No tiene ningún plan de tratamiento',
     );
+  });
+
+  it('pinta cada sesion con su estado escrito y, si esta ocupada, con su cita', async () => {
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+    httpMock.expectOne((r) => r.url === URL_PLANES).flush([CON_UNA_ATENDIDA]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const filas = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.sesiones li'),
+    ).map((li) => (li.textContent ?? '').replace(/\s+/g, ' ').trim());
+
+    expect(filas).toHaveLength(6);
+    expect(filas[0]).toContain('Sesión 1');
+    expect(filas[0]).toContain('Atendida');
+    expect(filas[0]).toContain('CIT-000123');
+    expect(filas[0]).toContain('2026');
+    expect(filas[1]).toContain('Sesión 2');
+    expect(filas[1]).toContain('Pendiente');
+    expect(filas[1]).not.toContain('CIT-');
+  });
+
+  // ------------------------------------------------------------------
+  // El cierre de la sesión con sus recomendaciones
+  // ------------------------------------------------------------------
+
+  it('ofrece cerrar la sesion atendida al odontologo que firmo el plan', async () => {
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+    httpMock.expectOne((r) => r.url === URL_PLANES).flush([CON_UNA_ATENDIDA]);
+    resolverMiRegistro(httpMock, FICHA_DEL_AUTOR);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(raiz.querySelector('button[aria-label^="Cerrar la sesión 1"]')).not.toBeNull();
+    // La pendiente no se cierra: no hay ninguna consulta de la que hablar.
+    expect(raiz.querySelector('button[aria-label^="Cerrar la sesión 2"]')).toBeNull();
+  });
+
+  it('a un odontologo que no firmo el plan no se le ofrece cerrar', async () => {
+    // El servidor le responderia 403 por la autoria del plan: ofrecerle el boton
+    // seria prometerle algo que no puede hacer.
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+    httpMock.expectOne((r) => r.url === URL_PLANES).flush([CON_UNA_ATENDIDA]);
+    resolverMiRegistro(httpMock, 'fic-de-otra-odontologa');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('button[aria-label^="Cerrar la sesión"]'),
+    ).toBeNull();
+  });
+
+  it('una sesion cerrada muestra lo indicado y cuando volver', async () => {
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+    const conUnaCerrada: Plan = {
+      ...PLAN,
+      sesiones: PLAN.sesiones.map((s) =>
+        s.numero === 1
+          ? {
+              ...s,
+              estado: 'CERRADA' as const,
+              cita: { id: 'c1', codigo: 'CIT-000123', inicio: '2026-09-12T14:00:00Z' },
+              recomendaciones: [{ id: 'rec-1', descripcion: 'Mantener dieta blanda' }],
+              proximoControl: '2026-10-15',
+              observacion: 'Volver antes si hay dolor',
+            }
+          : s,
+      ),
+    };
+    httpMock.expectOne((r) => r.url === URL_PLANES).flush([conUnaCerrada]);
+    resolverMiRegistro(httpMock, FICHA_DEL_AUTOR);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(raiz.textContent).toContain('Mantener dieta blanda');
+    expect(raiz.textContent).toContain('Próximo control');
+    expect(raiz.textContent).toContain('Volver antes si hay dolor');
+    // Y ya no se ofrece cerrarla otra vez: el servidor responderia 409.
+    expect(raiz.querySelector('button[aria-label^="Cerrar la sesión 1"]')).toBeNull();
   });
 });

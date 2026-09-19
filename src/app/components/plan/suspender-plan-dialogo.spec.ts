@@ -21,6 +21,10 @@ const PLAN: Plan = {
     id: `ses-${numero}`,
     numero,
     estado: 'PENDIENTE' as const,
+    cita: null,
+    recomendaciones: [],
+    proximoControl: null,
+    observacion: null,
   })),
 };
 

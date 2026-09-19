@@ -23,6 +23,18 @@ export interface Cita {
   tratamiento: CitaReferencia;
   odontologo: CitaReferencia;
   consultorio: CitaReferencia;
+  /**
+   * Solo en la respuesta de registrar el resultado, y solo si la cita atendida
+   * ha ocupado una sesion de un plan: su ausencia no dice nada fuera de ahi.
+   */
+  sesionEnlazada?: SesionEnlazada;
+}
+
+/** La sesion del plan que acaba de ocupar una cita al registrarse como atendida. */
+export interface SesionEnlazada {
+  planId: string;
+  numero: number;
+  tratamiento: string;
 }
 
 /**

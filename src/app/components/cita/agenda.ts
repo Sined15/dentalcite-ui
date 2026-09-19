@@ -1,7 +1,9 @@
 import { DatePipe } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { provideNativeDateAdapter } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,21 +13,41 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
+import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeError } from '../../core/http/api-error';
-import { CitaResumen, ESTADOS_CITA, EstadoCita, Odontologo } from '../../models';
+import {
+  CalendarioPublico,
+  Cita,
+  CitaResumen,
+  ESTADOS_CITA,
+  EstadoCita,
+  Odontologo,
+} from '../../models';
 import { CitaService } from '../../services/cita.service';
+import { PublicoService } from '../../services/publico.service';
 import { OdontologoService } from '../../services/odontologo.service';
 import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
+import { claseDeDias } from '../../shared/dias-de-atencion';
 import { CancelarDialogo, CancelarDialogoDatos } from './cancelar-dialogo';
-import { ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
+import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
 import { HistorialDialogo, HistorialDialogoDatos } from './historial-dialogo';
 
-/** Hoy en formato "YYYY-MM-DD", sin pasar por UTC. */
-function hoy(): string {
+/** Hoy a medianoche local: el calendario trabaja con fechas, no con instantes. */
+function hoy(): Date {
   const ahora = new Date();
-  const mes = String(ahora.getMonth() + 1).padStart(2, '0');
-  const dia = String(ahora.getDate()).padStart(2, '0');
-  return `${ahora.getFullYear()}-${mes}-${dia}`;
+  return new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+}
+
+/**
+ * El dia como lo espera la API: "YYYY-MM-DD" en hora local.
+ *
+ * No sirve `toISOString()`: pasa por UTC, y en Lima una fecha a medianoche
+ * retrocederia al dia anterior.
+ */
+function aIso(fecha: Date): string {
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${fecha.getFullYear()}-${mes}-${dia}`;
 }
 
 /**
@@ -43,10 +65,12 @@ function hoy(): string {
  */
 @Component({
   selector: 'app-agenda',
+  providers: [provideNativeDateAdapter()],
   imports: [
     DatePipe,
     ReactiveFormsModule,
     MatButtonModule,
+    MatDatepickerModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
@@ -57,31 +81,60 @@ function hoy(): string {
   ],
   template: `
     <header class="cabecera">
-      <h1>Agenda</h1>
+      <h1>{{ esOdontologo ? 'Mi agenda' : 'Agenda' }}</h1>
     </header>
 
     <form [formGroup]="formulario" (ngSubmit)="consultar()" class="filtros">
+      <!--
+        El campo es de solo lectura y abre el calendario al pulsarlo: la fecha
+        se marca, no se teclea. Escribirla a mano admite dias que no existen y
+        formatos que el servidor rechaza con un 400 que no explica nada.
+      -->
       <mat-form-field appearance="outline">
         <mat-label>Desde</mat-label>
-        <input matInput type="date" formControlName="desde" />
+        <input
+          matInput
+          readonly
+          [matDatepicker]="calendarioDesde"
+          formControlName="desde"
+          (click)="calendarioDesde.open()"
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="calendarioDesde" />
+        <mat-datepicker #calendarioDesde [dateClass]="diasCerrados()" />
       </mat-form-field>
 
       <mat-form-field appearance="outline">
         <mat-label>Hasta</mat-label>
-        <input matInput type="date" formControlName="hasta" />
+        <input
+          matInput
+          readonly
+          [matDatepicker]="calendarioHasta"
+          [min]="formulario.controls.desde.value"
+          formControlName="hasta"
+          (click)="calendarioHasta.open()"
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="calendarioHasta" />
+        <mat-datepicker #calendarioHasta [dateClass]="diasCerrados()" />
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Odontólogo</mat-label>
-        <mat-select formControlName="odontologoId">
-          <mat-option value="">Todos</mat-option>
-          @for (odontologo of odontologos(); track odontologo.id) {
-            <mat-option [value]="odontologo.id">
-              {{ odontologo.nombres }} {{ odontologo.apellidos }}
-            </mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
+      <!--
+        Al odontologo no se le pinta: el servidor le devuelve las suyas y
+        descarta el filtro, asi que el desplegable prometeria algo que no puede
+        cumplir. Lo mismo vale para la columna del odontologo en la tabla.
+      -->
+      @if (!esOdontologo) {
+        <mat-form-field appearance="outline">
+          <mat-label>Odontólogo</mat-label>
+          <mat-select formControlName="odontologoId">
+            <mat-option value="">Todos</mat-option>
+            @for (odontologo of odontologos(); track odontologo.id) {
+              <mat-option [value]="odontologo.id">
+                {{ odontologo.nombres }} {{ odontologo.apellidos }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
 
       <mat-form-field appearance="outline">
         <mat-label>Estado</mat-label>
@@ -217,13 +270,6 @@ function hoy(): string {
     />
   `,
   styles: `
-    .cabecera {
-      margin-bottom: 1rem;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin: 0;
-    }
     .filtros {
       display: flex;
       flex-wrap: wrap;
@@ -236,9 +282,6 @@ function hoy(): string {
     }
     .filtros button {
       margin-top: 0.5rem;
-    }
-    .tabla-scroll {
-      overflow-x: auto;
     }
     table {
       width: 100%;
@@ -281,15 +324,31 @@ function hoy(): string {
 export class Agenda {
   private readonly servicio = inject(CitaService);
   private readonly odontologoService = inject(OdontologoService);
+  private readonly publicoService = inject(PublicoService);
+  private readonly auth = inject(AuthService);
   private readonly dialogo = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly fb = inject(FormBuilder);
+
+  /**
+   * El odontologo ve la misma pantalla, con el ambito fijado por el servidor a
+   * partir del token. Aqui solo se quita lo que para el no significa nada.
+   */
+  protected readonly esOdontologo = this.auth.rol() === 'ODONTOLOGO';
+
+  /**
+   * Aqui los dias sin atencion se atenuan pero **se pueden marcar**: son los
+   * extremos de un rango, y consultar «del sabado al domingo» o hasta fin de mes
+   * es legitimo aunque esos dias no se atienda.
+   */
+  protected readonly diasAbiertos = signal<CalendarioPublico | null>(null);
+  protected readonly diasCerrados = computed(() => claseDeDias(this.diasAbiertos()));
 
   protected readonly estados = ESTADOS_CITA;
   protected readonly columnas = [
     'hora',
     'paciente',
-    'odontologo',
+    ...(this.esOdontologo ? [] : ['odontologo']),
     'tratamiento',
     'consultorio',
     'estado',
@@ -315,22 +374,32 @@ export class Agenda {
       // El servidor tambien lo rechaza con un 400; comprobarlo aqui ahorra el
       // viaje y explica el limite antes de pulsar.
       validators: (grupo) => {
-        const desde = grupo.get('desde')?.value as string;
-        const hasta = grupo.get('hasta')?.value as string;
+        const desde = grupo.get('desde')?.value as Date | null;
+        const hasta = grupo.get('hasta')?.value as Date | null;
         if (!desde || !hasta) {
           return null;
         }
-        return desde > hasta ? { rangoInvertido: true } : null;
+        return desde.getTime() > hasta.getTime() ? { rangoInvertido: true } : null;
       },
     },
   );
 
   constructor() {
-    cargarTodasLasPaginas((pagina) =>
-      this.odontologoService.listar({ page: pagina, size: 100 }),
-    ).subscribe({
-      next: (lista) => this.odontologos.set(lista.filter((o) => o.activo)),
-      error: (err: unknown) => this.error.set(mensajeDeError(err)),
+    // Sin desplegable no hay nada que llenar: traer el listado entero para no
+    // pintarlo seria una consulta por cada visita del odontologo a su agenda.
+    if (!this.esOdontologo) {
+      cargarTodasLasPaginas((pagina) =>
+        this.odontologoService.listar({ page: pagina, size: 100 }),
+      ).subscribe({
+        next: (lista) => this.odontologos.set(lista.filter((o) => o.activo)),
+        error: (err: unknown) => this.error.set(mensajeDeError(err)),
+      });
+    }
+
+    this.publicoService.calendario().subscribe({
+      next: (dias) => this.diasAbiertos.set(dias),
+      // Sin el dato el calendario no atenua nada, que es como estaba antes.
+      error: () => this.diasAbiertos.set(null),
     });
 
     this.consultar();
@@ -358,8 +427,8 @@ export class Agenda {
     this.servicio
       .listar(
         {
-          desde: valores.desde,
-          hasta: valores.hasta,
+          desde: aIso(valores.desde),
+          hasta: aIso(valores.hasta),
           odontologoId: valores.odontologoId || undefined,
           estado: valores.estado || undefined,
         },
@@ -409,11 +478,11 @@ export class Agenda {
     this.dialogo
       .open(ResultadoDialogo, { data: datos })
       .afterClosed()
-      .subscribe((registrado) => {
-        if (!registrado) {
+      .subscribe((cerrada: Cita | false | undefined) => {
+        if (!cerrada) {
           return;
         }
-        this.snackBar.open(`Resultado de ${cita.codigo} registrado.`, 'Cerrar', { duration: 6000 });
+        this.snackBar.open(avisoDeResultado(cerrada), 'Cerrar', { duration: 6000 });
         // La fila cambio de estado y la agenda que hay delante ya no vale.
         this.cargar();
       });

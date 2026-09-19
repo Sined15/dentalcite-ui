@@ -13,8 +13,12 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { mensajeDeError } from '../../../core/http/api-error';
 import { CitaResumen, PacienteDetalle, Plan } from '../../../models';
+import { OdontologoService } from '../../../services/odontologo.service';
 import { PacienteService } from '../../../services/paciente.service';
 import { PlanService } from '../../../services/plan.service';
+import { UsuarioService } from '../../../services/usuario.service';
+import { miOdontologo } from '../../../shared/mi-odontologo';
+import { CerrarSesionDatos, CerrarSesionDialogo } from '../../plan/cerrar-sesion-dialogo';
 import { PlanEdit, PlanEditDatos } from '../../plan/plan-edit';
 import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-plan-dialogo';
 
@@ -199,6 +203,62 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                         @if (plan.motivoSuspension) {
                           <span class="estado">Motivo: {{ plan.motivoSuspension }}</span>
                         }
+
+                        <!--
+                          El estado va escrito y no solo insinuado con estilo: quien
+                          no distingue el realce tiene que poder leer igual qué
+                          sesiones están hechas y con qué cita.
+                        -->
+                        <ol
+                          class="sesiones"
+                          [attr.aria-label]="'Sesiones del plan de ' + plan.tratamiento.nombre"
+                        >
+                          @for (sesion of plan.sesiones; track sesion.id) {
+                            <li [class.ocupada]="sesion.cita">
+                              <span class="numero">Sesión {{ sesion.numero }}</span>
+                              <span>· {{ etiquetaSesion(sesion.estado) }}</span>
+                              @if (sesion.cita; as cita) {
+                                <span>· {{ cita.codigo }} · {{ cita.inicio | date: 'd MMM y' }}</span>
+                              }
+
+                              <!--
+                                Cerrar es del administrador y del odontologo que
+                                firmo el plan: a otro el servidor le responde 403,
+                                asi que no se le ofrece el boton.
+                              -->
+                              @if (sesion.estado === 'ATENDIDA' && puedeCerrar(plan)) {
+                                <button
+                                  mat-button
+                                  type="button"
+                                  class="cerrar"
+                                  (click)="cerrarSesion(plan, sesion)"
+                                  [attr.aria-label]="
+                                    'Cerrar la sesión ' +
+                                    sesion.numero +
+                                    ' del plan de ' +
+                                    plan.tratamiento.nombre
+                                  "
+                                >
+                                  Cerrar sesión
+                                </button>
+                              }
+
+                              @if (sesion.estado === 'CERRADA') {
+                                <ul class="indicado">
+                                  @for (cuidado of sesion.recomendaciones; track cuidado.id) {
+                                    <li>{{ cuidado.descripcion }}</li>
+                                  }
+                                </ul>
+                                <span class="control">
+                                  Próximo control: {{ sesion.proximoControl | date: 'd MMM y' }}
+                                </span>
+                                @if (sesion.observacion) {
+                                  <span class="control">{{ sesion.observacion }}</span>
+                                }
+                              }
+                            </li>
+                          }
+                        </ol>
                       </div>
 
                       @if (plan.activo) {
@@ -303,7 +363,7 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
       margin: 0;
       padding: 0;
     }
-    .planes li {
+    .planes > li {
       display: flex;
       gap: 1rem;
       align-items: center;
@@ -311,6 +371,38 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
       flex-wrap: wrap;
       padding: 0.75rem 0;
       border-bottom: 1px solid var(--mat-sys-outline-variant, #cac4d0);
+    }
+    .sesiones {
+      list-style: none;
+      margin: 0.5rem 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+    }
+    /* Cada fragmento baja entero a la línea siguiente a 360 px, sin partirse. */
+    .sesiones li {
+      display: flex;
+      flex-wrap: wrap;
+      column-gap: 0.25rem;
+      font-size: 0.8125rem;
+    }
+    .sesiones li.ocupada .numero {
+      font-weight: 600;
+    }
+    /* Lo indicado al cerrar ocupa su propia linea: son varias frases y leerlas
+       encadenadas con el resto de la sesion las vuelve ilegibles. */
+    .indicado {
+      flex-basis: 100%;
+      margin: 0.25rem 0 0;
+      padding-left: 1.1rem;
+    }
+    .control {
+      flex-basis: 100%;
+      color: var(--mat-sys-on-surface-variant, #49454f);
+    }
+    .cerrar {
+      margin-left: auto;
     }
     .plan-datos {
       display: flex;
@@ -326,11 +418,11 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
 
     /* RNF-09: a 360px el boton baja bajo los datos en vez de estrujarlos. */
     @media (max-width: 480px) {
-      .planes li {
+      .planes > li {
         flex-direction: column;
         align-items: stretch;
       }
-      .planes li button {
+      .planes > li > button {
         width: 100%;
       }
     }
@@ -346,6 +438,8 @@ export class PacienteFicha {
   private readonly auth = inject(AuthService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly planService = inject(PlanService);
+  private readonly usuarioService = inject(UsuarioService);
+  private readonly odontologoService = inject(OdontologoService);
   private readonly dialogo = inject(MatDialog);
 
   private readonly id = this.ruta.snapshot.paramMap.get('id') ?? '';
@@ -353,6 +447,13 @@ export class PacienteFicha {
   protected readonly ficha = signal<PacienteDetalle | null>(null);
   protected readonly planes = signal<Plan[]>([]);
   protected readonly errorPlanes = signal<string | null>(null);
+
+  /**
+   * Mi registro de odontólogo, para saber qué planes firmé yo. Nulo mientras se
+   * resuelve y para quien no es odontólogo: en ese caso no se ofrece cerrar, que
+   * es lo prudente cuando aún no se sabe.
+   */
+  private readonly miOdontologoId = signal<string | null>(null);
   protected readonly cargando = signal(false);
   protected readonly guardando = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -382,6 +483,18 @@ export class PacienteFicha {
     return this.puedeEditar();
   }
 
+  /** Cómo se lee el estado de una sesión, en vez de la constante que manda el servidor. */
+  protected etiquetaSesion(estado: Plan['sesiones'][number]['estado']): string {
+    switch (estado) {
+      case 'ATENDIDA':
+        return 'Atendida';
+      case 'CERRADA':
+        return 'Cerrada';
+      default:
+        return 'Pendiente';
+    }
+  }
+
   /** HU-17 · RF-23: planificar es del odontólogo y del administrador. */
   protected puedePlanificar(): boolean {
     const rol = this.auth.rol();
@@ -402,6 +515,37 @@ export class PacienteFicha {
         }
         this.snackBar.open(
           `Plan de ${plan.tratamiento.nombre} creado con ${plan.sesionesPrevistas} sesiones.`,
+          'Cerrar',
+          { duration: 6000 },
+        );
+        this.cargarPlanes();
+      });
+  }
+
+  /**
+   * Cerrar una sesión es del administrador y del odontólogo que firmó el plan, que
+   * es la misma pregunta que decide la suspensión. Se compara contra el registro
+   * propio y no contra la cuenta, igual que hace el servidor.
+   */
+  protected puedeCerrar(plan: Plan): boolean {
+    const rol = this.auth.rol();
+    if (rol === 'ADMINISTRADOR') {
+      return true;
+    }
+    return rol === 'ODONTOLOGO' && this.miOdontologoId() === plan.odontologo.id;
+  }
+
+  protected cerrarSesion(plan: Plan, sesion: Plan['sesiones'][number]): void {
+    const datos: CerrarSesionDatos = { plan, sesion };
+    this.dialogo
+      .open(CerrarSesionDialogo, { data: datos })
+      .afterClosed()
+      .subscribe((actualizado: Plan | null | undefined) => {
+        if (!actualizado) {
+          return;
+        }
+        this.snackBar.open(
+          `Sesión ${sesion.numero} cerrada. El paciente ya puede leer qué hacer hasta la siguiente.`,
           'Cerrar',
           { duration: 6000 },
         );
@@ -450,6 +594,14 @@ export class PacienteFicha {
   constructor() {
     this.cargar();
     this.cargarPlanes();
+
+    // Solo hace falta para decidir qué planes puede cerrar este profesional; para
+    // los demás roles sería un par de llamadas que no cambian nada de la pantalla.
+    if (this.auth.rol() === 'ODONTOLOGO') {
+      miOdontologo(this.usuarioService, this.odontologoService).subscribe((odontologo) =>
+        this.miOdontologoId.set(odontologo?.id ?? null),
+      );
+    }
   }
 
   protected guardar(): void {

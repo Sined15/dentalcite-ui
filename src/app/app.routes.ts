@@ -1,17 +1,20 @@
 import { Routes } from '@angular/router';
 import { passwordGuard } from './core/auth/password.guard';
+import { misHorariosGuard } from './components/horario/mis-horarios.guard';
 import { rolGuard } from './core/auth/rol.guard';
 
 const TODOS = ['PACIENTE', 'RECEPCIONISTA', 'ODONTOLOGO', 'ADMINISTRADOR'] as const;
 const AGENDA = ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'] as const;
-// HU-11: la agenda de citas expone los datos de todos los pacientes, asi que no
-// puede reutilizar AGENDA —que incluye al ODONTOLOGO, y sus citas son solo las
-// suyas—. Que el odontologo vea las propias es parte de RF-18, pero con la
-// comprobacion de propiedad que HU-15 traera.
 const RECEPCION = ['RECEPCIONISTA', 'ADMINISTRADOR'] as const;
 // RF-07 da la busqueda de pacientes al «personal»: los tres roles que atienden.
 const PERSONAL = ['RECEPCIONISTA', 'ADMINISTRADOR', 'ODONTOLOGO'] as const;
 const HORARIOS = ['ODONTOLOGO', 'ADMINISTRADOR'] as const;
+// La consulta de franjas es de quien va a reservar sobre ellas: el paciente para
+// si mismo y recepcion en nombre de alguien. El odontologo queda fuera aunque la
+// API se la conceda: lo que ocupa su jornada lo ve en su agenda, y una parrilla
+// de horas libres que no puede pulsar solo le hacia preguntarse que se esperaba
+// de el ahi.
+const RESERVAN = ['PACIENTE', 'RECEPCIONISTA', 'ADMINISTRADOR'] as const;
 // HU-15: sus propias citas las ve y las cancela el paciente, y solo el paciente.
 // La agenda de la clinica es otra pantalla y otro rol.
 const SOLO_PACIENTE = ['PACIENTE'] as const;
@@ -176,6 +179,16 @@ export const routes: Routes = [
           ),
       },
 
+      // El atajo del odontologo a su propio horario. No es una pantalla, es una
+      // traduccion de «yo» a «mi registro», asi que la guarda resuelve el destino
+      // y redirige a la de siempre.
+      {
+        path: 'mis-horarios',
+        canActivate: [rolGuard, misHorariosGuard],
+        data: { roles: ['ODONTOLOGO', 'ADMINISTRADOR'] },
+        children: [],
+      },
+
       // Los horarios cuelgan de su odontologo.
       {
         path: 'odontologos/:odontologoId/horarios',
@@ -184,21 +197,23 @@ export const routes: Routes = [
         loadComponent: () => import('./components/horario/horario-list').then((m) => m.HorarioList),
       },
 
-      // HU-08: la consulta de franjas la ve cualquier rol autenticado, porque
-      // el paciente es su destinatario principal.
       {
         path: 'disponibilidad',
         canActivate: [rolGuard],
-        data: { roles: TODOS },
+        data: { roles: RESERVAN },
         loadComponent: () =>
           import('./components/disponibilidad/disponibilidad').then((m) => m.Disponibilidad),
       },
 
-      // HU-11: la agenda del dia y la cancelacion desde recepcion.
+      // La agenda del dia y la cancelacion desde recepcion. El odontologo entra
+      // a la misma pantalla y ve **las suyas**. Que el ambito sea el suyo no es un
+      // patron de ruta y no puede serlo: lo fija el servidor desde el token, de
+      // modo que la guarda solo abre la puerta. Cancelar sigue siendo de
+      // recepcion, y eso lo comprueba la API.
       {
         path: 'citas',
         canActivate: [rolGuard],
-        data: { roles: RECEPCION },
+        data: { roles: AGENDA },
         loadComponent: () => import('./components/cita/agenda').then((m) => m.Agenda),
       },
 

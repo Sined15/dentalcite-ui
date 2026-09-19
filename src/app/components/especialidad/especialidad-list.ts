@@ -116,23 +116,8 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
     />
   `,
   styles: `
-    .cabecera {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 1rem;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin: 0;
-    }
     .filtro {
       width: min(100%, 22rem);
-    }
-    .tabla-scroll {
-      overflow-x: auto;
     }
     table {
       width: 100%;

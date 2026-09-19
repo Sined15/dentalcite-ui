@@ -65,7 +65,7 @@ const ANCHO_ESCRITORIO = '(min-width: 56.25rem)';
 const MENU: readonly EntradaMenu[] = [
   {
     ruta: '/usuarios',
-    etiqueta: 'Cuentas',
+    etiqueta: 'Cuentas de acceso',
     icono: 'manage_accounts',
     roles: ['ADMINISTRADOR'],
   },
@@ -97,7 +97,9 @@ const MENU: readonly EntradaMenu[] = [
     ruta: '/disponibilidad',
     etiqueta: 'Disponibilidad',
     icono: 'event_available',
-    roles: ['PACIENTE', 'RECEPCIONISTA', 'ODONTOLOGO', 'ADMINISTRADOR'],
+    // Sin el odontologo: consultar franjas es el paso previo a reservarlas, y el
+    // no reserva. Su jornada la ve en la agenda.
+    roles: ['PACIENTE', 'RECEPCIONISTA', 'ADMINISTRADOR'],
   },
   {
     ruta: '/pacientes',
@@ -110,6 +112,22 @@ const MENU: readonly EntradaMenu[] = [
     etiqueta: 'Agenda',
     icono: 'event_note',
     roles: ['RECEPCIONISTA', 'ADMINISTRADOR'],
+  },
+  // La misma ruta con otro rotulo: para el odontologo no es «la agenda» sino la
+  // suya, que es lo unico que el servidor le devuelve.
+  {
+    ruta: '/citas',
+    etiqueta: 'Mi agenda',
+    icono: 'event_note',
+    roles: ['ODONTOLOGO'],
+  },
+  // Su propio horario, al que hasta ahora no habia forma de llegar: la pantalla
+  // cuelga del listado de odontologos, que es de administracion.
+  {
+    ruta: '/mis-horarios',
+    etiqueta: 'Mis horarios',
+    icono: 'schedule',
+    roles: ['ODONTOLOGO'],
   },
   {
     ruta: '/citas/pendientes',

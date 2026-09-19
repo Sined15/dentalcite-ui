@@ -103,12 +103,15 @@ import { HorarioEditDialogo, HorarioDialogoDatos } from './horario-edit-dialogo'
       flex-wrap: wrap;
       margin-bottom: 1rem;
     }
-    h1 {
+    /*
+      Esta pantalla cuelga de una migaja de pan, asi que su titulo necesita
+      separarse de ella; el resto no. Se escribe con la clase por delante, y no
+      como un h1 suelto, para que gane al cromo global por especificidad y no
+      por el orden en que se inyecten las hojas de estilo.
+    */
+    .cabecera h1 {
       font-size: 1.5rem;
       margin: 0.5rem 0 0;
-    }
-    .tabla-scroll {
-      overflow-x: auto;
     }
     table {
       width: 100%;

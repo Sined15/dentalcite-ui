@@ -8,9 +8,9 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { mensajeDeError } from '../../core/http/api-error';
-import { CitaResumen } from '../../models';
+import { Cita, CitaResumen } from '../../models';
 import { CitaService } from '../../services/cita.service';
-import { ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
+import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
 
 /**
  * Las citas pendientes de cierre (HU-16 · RF-22).
@@ -112,13 +112,6 @@ import { ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
     />
   `,
   styles: `
-    .cabecera {
-      margin-bottom: 1rem;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin: 0;
-    }
     /* Color propio en vez de opacidad: al 70 % el contraste caia por debajo del
        4.5:1 que exige RNF-08. */
     .ayuda,
@@ -128,9 +121,6 @@ import { ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
     }
     .ayuda {
       margin: 0.25rem 0 0;
-    }
-    .tabla-scroll {
-      overflow-x: auto;
     }
     table {
       width: 100%;
@@ -200,11 +190,11 @@ export class PendientesCierre {
     this.dialogo
       .open(ResultadoDialogo, { data: datos })
       .afterClosed()
-      .subscribe((registrado) => {
-        if (!registrado) {
+      .subscribe((cerrada: Cita | false | undefined) => {
+        if (!cerrada) {
           return;
         }
-        this.snackBar.open(`Resultado de ${cita.codigo} registrado.`, 'Cerrar', { duration: 6000 });
+        this.snackBar.open(avisoDeResultado(cerrada), 'Cerrar', { duration: 6000 });
         // La cita sale de la cola: la lista que hay delante ya no vale.
         this.cargar();
       });

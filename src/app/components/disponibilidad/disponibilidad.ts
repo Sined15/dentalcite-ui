@@ -4,7 +4,6 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
@@ -20,20 +19,21 @@ import { debounceTime, distinctUntilChanged, switchMap, tap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeError } from '../../core/http/api-error';
 import {
+  CalendarioPublico,
   Cita,
   DIAS_MAXIMOS,
   DisponibilidadResponse,
   Odontologo,
-  PASO_AGRUPACION_MINUTOS,
-  PASO_MOTOR_MINUTOS,
   Paciente,
   Tratamiento,
 } from '../../models';
 import { DisponibilidadService } from '../../services/disponibilidad.service';
 import { OdontologoService } from '../../services/odontologo.service';
 import { PacienteService } from '../../services/paciente.service';
+import { PublicoService } from '../../services/publico.service';
 import { TratamientoService } from '../../services/tratamiento.service';
 import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
+import { filtroDeDias, seAtiende } from '../../shared/dias-de-atencion';
 import { BloqueAgrupado, DiaAgrupado, agruparFranjas } from './agrupar-franjas';
 import { CitaReservadaDialogo } from './cita-reservada-dialogo';
 import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './reservar-dialogo';
@@ -45,7 +45,6 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
     ReactiveFormsModule,
     MatAutocompleteModule,
     MatButtonModule,
-    MatButtonToggleModule,
     MatCardModule,
     MatDatepickerModule,
     MatFormFieldModule,
@@ -149,6 +148,7 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
               [matDatepicker]="calendario"
               [min]="minimoConsultable"
               [max]="maximoConsultable"
+              [matDatepickerFilter]="soloDiasConAtencion()"
               formControlName="dia"
               (click)="calendario.open()"
             />
@@ -207,24 +207,15 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
 
     @if (consultado() && !cargando() && !error()) {
       <section class="resultados">
+        <!--
+          El motor propone cada quince minutos y aqui se agrupan de treinta en
+          treinta para no fragmentar la eleccion. El paso no se ofrece como
+          opcion: agrupar no descarta ninguna hora, porque el dialogo de reserva
+          conserva los inicios exactos del bloque, de modo que elegir la
+          granularidad solo obligaba a decidir algo que no cambia lo reservable.
+        -->
         <div class="resumen">
           <p role="status">{{ resumen() }}</p>
-
-          @if (dias().length > 0) {
-            <!--
-              RN-04: el motor propone cada quince minutos. Por defecto se agrupan
-              de treinta en treinta para no fragmentar la eleccion; quien quiera
-              el detalle puede pedirlo, porque agrupar no descarta nada.
-            -->
-            <mat-button-toggle-group
-              [value]="paso()"
-              (change)="paso.set($event.value)"
-              aria-label="Agrupación de las franjas"
-            >
-              <mat-button-toggle [value]="pasoAgrupacion">Cada 30 min</mat-button-toggle>
-              <mat-button-toggle [value]="pasoMotor">Cada 15 min</mat-button-toggle>
-            </mat-button-toggle-group>
-          }
         </div>
 
         @for (dia of dias(); track dia.fecha) {
@@ -236,9 +227,9 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
                   <!--
                     Reservan el paciente para si mismo (HU-09) y recepcion o
                     administracion en nombre de un paciente ya elegido (HU-14).
-                    Para el odontologo la franja es informacion: un boton que
-                    devolviera 403 al pulsarlo seria un fallo de diseno, y lo
-                    mismo vale para recepcion sin paciente, que daria 400.
+                    Mientras no se haya elegido a quien, la franja es solo
+                    informacion: un boton que devolviera 400 al pulsarlo seria un
+                    fallo de diseno.
                   -->
                   @if (puedeReservar()) {
                     <button
@@ -306,11 +297,6 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
       margin-top: 1.5rem;
     }
     .resumen {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
       margin-bottom: 1rem;
     }
     .resumen p {
@@ -396,6 +382,7 @@ export class Disponibilidad {
   private readonly tratamientoService = inject(TratamientoService);
   private readonly odontologoService = inject(OdontologoService);
   private readonly pacienteService = inject(PacienteService);
+  private readonly publicoService = inject(PublicoService);
   private readonly dialogo = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly auth = inject(AuthService);
@@ -417,8 +404,7 @@ export class Disponibilidad {
 
   /**
    * RF-15: reservar es del paciente para sí mismo o de recepción para alguien.
-   * Un odontólogo no reserva, y recepción sin paciente elegido tampoco: el botón
-   * daría un 400 al pulsarlo.
+   * Recepción sin paciente elegido no reserva: el botón daría un 400 al pulsarlo.
    */
   protected readonly puedeReservar = computed(() => {
     if (this.auth.rol() === 'PACIENTE') {
@@ -429,16 +415,12 @@ export class Disponibilidad {
   /** La última reserva de esta sesión, para que su código siga a la vista. */
   protected readonly ultimaReserva = signal<Cita | null>(null);
 
-  protected readonly pasoMotor = PASO_MOTOR_MINUTOS;
-  protected readonly pasoAgrupacion = PASO_AGRUPACION_MINUTOS;
-
   protected readonly tratamientos = signal<Tratamiento[]>([]);
   protected readonly odontologos = signal<Odontologo[]>([]);
   protected readonly respuesta = signal<DisponibilidadResponse | null>(null);
   protected readonly consultado = signal(false);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly paso = signal<number>(PASO_AGRUPACION_MINUTOS);
 
   /**
    * La ventana que el motor puede responder (RNF-01), llevada al calendario: hoy
@@ -464,6 +446,27 @@ export class Disponibilidad {
     dia: [this.minimoConsultable as Date | null, [Validators.required]],
   });
 
+  /**
+   * Los dias en que se atiende. Se pide una vez: no cambia mientras la pantalla
+   * este abierta, y el calendario se estrecha al elegir odontologo sin volver a
+   * preguntar.
+   */
+  protected readonly diasAbiertos = signal<CalendarioPublico | null>(null);
+
+  protected readonly odontologoElegido = toSignal(
+    this.formulario.controls.odontologoId.valueChanges,
+    { initialValue: '' },
+  );
+
+  /**
+   * El domingo y los feriados salen apagados, y con un odontologo elegido tambien
+   * los dias que esa persona no atiende. Antes se podian marcar y la respuesta
+   * llegaba vacia, que no dice si es que no queda hueco o que ese dia no se abre.
+   */
+  protected readonly soloDiasConAtencion = computed(() =>
+    filtroDeDias(this.diasAbiertos(), this.odontologoElegido() || null),
+  );
+
   protected readonly tratamientoElegido = toSignal(
     this.formulario.controls.tratamientoId.valueChanges,
     { initialValue: '' },
@@ -480,7 +483,7 @@ export class Disponibilidad {
     );
   });
 
-  protected readonly dias = computed(() => agruparFranjas(this.respuesta(), this.paso()));
+  protected readonly dias = computed(() => agruparFranjas(this.respuesta()));
 
   protected readonly resumen = computed(() => {
     const dias = this.dias();
@@ -510,6 +513,26 @@ export class Disponibilidad {
     ).subscribe({
       next: (lista) => this.odontologos.set(lista.filter((o) => o.activo)),
       error: (err: unknown) => this.error.set(mensajeDeError(err)),
+    });
+
+    this.publicoService.calendario().subscribe({
+      next: (dias) => this.diasAbiertos.set(dias),
+      // Sin este dato el calendario no apaga nada y se comporta como antes. No
+      // es un error que merezca ocupar el aviso de la pantalla: quien marque un
+      // dia cerrado recibira la lista vacia de siempre.
+      error: () => this.diasAbiertos.set(null),
+    });
+
+    // Un dia que deja de estar abierto —porque llego el calendario, o porque se
+    // eligio un odontologo que no atiende ese dia— se limpia en vez de quedarse
+    // marcado: el campo seguiria mostrandolo aunque el calendario ya lo apague.
+    effect(() => {
+      const dias = this.diasAbiertos();
+      const odontologo = this.odontologoElegido();
+      const elegido = this.formulario.controls.dia.value;
+      if (elegido && !seAtiende(dias, elegido, odontologo || null)) {
+        this.formulario.controls.dia.setValue(null);
+      }
     });
 
     // Cambiar de tratamiento puede dejar al odontologo elegido sin la

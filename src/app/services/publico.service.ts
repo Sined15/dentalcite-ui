@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
+  CalendarioPublico,
   EspecialidadDetalle,
   EspecialidadPublica,
   OdontologoPublico,
@@ -36,5 +37,15 @@ export class PublicoService {
 
   odontologos(): Observable<OdontologoPublico[]> {
     return this.http.get<OdontologoPublico[]>(`${this.url}/odontologos`);
+  }
+
+  /**
+   * Que dias abre la clinica. Lo consumen los calendarios para no ofrecer un dia
+   * que despues no tiene ninguna franja: el horario por odontologo es de rol
+   * privilegiado y los feriados no tienen otra ruta, asi que sin esto el cliente
+   * no puede saberlo.
+   */
+  calendario(): Observable<CalendarioPublico> {
+    return this.http.get<CalendarioPublico>(`${this.url}/calendario`);
   }
 }

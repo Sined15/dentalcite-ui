@@ -128,18 +128,6 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
     }
   `,
   styles: `
-    .cabecera {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin: 0;
-    }
     h2 {
       font-size: 1.125rem;
       margin: 1.5rem 0 0.75rem;

@@ -286,6 +286,18 @@ describe('App · menu del paciente', () => {
     expect(cabeceraDeGrupo(fixture)).toBeNull();
   });
 
+  it('el odontologo no ve Disponibilidad y el paciente si', async () => {
+    // Consultar franjas es el paso previo a reservarlas, y el odontologo no
+    // reserva: lo que ocupa su jornada lo ve en la agenda. La entrada se quita
+    // en vez de dejarla llevar a una parrilla que solo puede mirar.
+    const delOdontologo = await montarEn('ODONTOLOGO', '/bloqueos');
+    expect(etiquetas(delOdontologo)).not.toContain('Disponibilidad');
+    expect(etiquetas(delOdontologo)).toContain('Bloqueos de agenda');
+
+    TestBed.resetTestingModule();
+    expect(etiquetas(montar('PACIENTE'))).toContain('Disponibilidad');
+  });
+
   it('el grupo arranca cerrado y sus hijos no estan en el DOM', async () => {
     // Plegado tiene que ser fuera del DOM: oculto con CSS seguiria en el
     // recorrido del tabulador.

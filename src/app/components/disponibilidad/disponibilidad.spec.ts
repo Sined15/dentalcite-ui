@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { environment } from '../../../environments/environment';
 import { PageResponse } from '../../core/http/api.types';
 import {
+  CalendarioPublico,
   Cita,
   DisponibilidadResponse,
   Especialidad,
@@ -25,6 +26,7 @@ import { ReservarResultado } from './reservar-dialogo';
 const API = `${environment.apiUrl}/api/v1/disponibilidad`;
 const API_TRATAMIENTOS = `${environment.apiUrl}/api/v1/tratamientos`;
 const API_ODONTOLOGOS = `${environment.apiUrl}/api/v1/odontologos`;
+const API_CALENDARIO = `${environment.apiUrl}/api/v1/publico/calendario`;
 
 const ENDODONCIA: Especialidad = {
   id: 'esp-1',
@@ -82,6 +84,20 @@ const ODONTOLOGOS: Odontologo[] = [
   odontologo('odo-2', 'Ana', [ORTODONCIA]),
   { ...odontologo('odo-3', 'Baja', [ENDODONCIA]), activo: false },
 ];
+
+/**
+ * La clinica abre de lunes a sabado, cierra el domingo y el 28 de julio, y Juan
+ * solo atiende lunes, miercoles y viernes. Los tres casos que el calendario
+ * tiene que apagar.
+ */
+const CALENDARIO: CalendarioPublico = {
+  diasDeAtencion: [1, 2, 3, 4, 5, 6],
+  feriados: ['2026-07-28'],
+  porOdontologo: [
+    { odontologoId: 'odo-1', dias: [1, 3, 5] },
+    { odontologoId: 'odo-2', dias: [1, 2, 3, 4, 5, 6] },
+  ],
+};
 
 function pagina<T>(content: T[]): PageResponse<T> {
   return {
@@ -159,6 +175,21 @@ function iso(fecha: Date): string {
   return `${fecha.getFullYear()}-${mes}-${dia}`;
 }
 
+/**
+ * El primer dia de la ventana consultable que cae en uno de esos dias de la
+ * semana (1 = lunes ... 7 = domingo). Catorce dias siempre contienen uno.
+ */
+function primerDiaQueAtiende(dias: number[]): Date {
+  for (let i = 0; i < 14; i++) {
+    const fecha = hoyMas(i);
+    const dia = fecha.getDay() === 0 ? 7 : fecha.getDay();
+    if (dias.includes(dia)) {
+      return fecha;
+    }
+  }
+  throw new Error('Ningun dia de la ventana cae en ' + dias.join(', '));
+}
+
 /** Un dia cualquiera dentro de la ventana consultable. */
 const DIA = hoyMas(3);
 
@@ -186,9 +217,9 @@ interface Interno {
   pacienteElegido: () => Paciente | null;
   elegirPaciente: (p: Paciente) => void;
   mostrarPaciente: (p: Paciente | string | null) => string;
-  paso: { set: (v: number) => void };
   consultar: () => void;
   error: () => string | null;
+  soloDiasConAtencion: () => (fecha: Date | null) => boolean;
 }
 
 // El `TestBed` no monta `appConfig`, asi que sin esto el DatePipe caeria a
@@ -261,9 +292,11 @@ describe('Disponibilidad', () => {
     fixture = TestBed.createComponent(Disponibilidad);
     componente = fixture.componentInstance as unknown as Interno;
 
-    // El componente carga los dos catalogos en el constructor.
+    // El componente carga los dos catalogos en el constructor, y pregunta que
+    // dias abre la clinica para no ofrecer un domingo que no tiene franjas.
     httpMock.expectOne((r) => r.url === API_TRATAMIENTOS).flush(pagina(TRATAMIENTOS));
     httpMock.expectOne((r) => r.url === API_ODONTOLOGOS).flush(pagina(ODONTOLOGOS));
+    httpMock.expectOne(API_CALENDARIO).flush(CALENDARIO);
     await fixture.whenStable();
   }
 
@@ -341,14 +374,19 @@ describe('Disponibilidad', () => {
   });
 
   it('envia odontologoId cuando se elige uno concreto', async () => {
+    // Un dia que Juan atiende: con el de hoy la prueba dependeria de la semana,
+    // porque elegirle limpia el dia si ese no es de los suyos.
+    const suyo = primerDiaQueAtiende([1, 3, 5]);
     componente.formulario.patchValue({ tratamientoId: 'tra-1' });
     await fixture.whenStable();
     componente.formulario.patchValue({ odontologoId: 'odo-1' });
     await fixture.whenStable();
+    componente.formulario.patchValue({ dia: suyo });
     componente.consultar();
 
     const req = httpMock.expectOne((r) => r.url === API);
     expect(req.request.params.get('odontologoId')).toBe('odo-1');
+    expect(req.request.params.get('desde')).toBe(iso(suyo));
     req.flush(RESPUESTA);
   });
 
@@ -409,7 +447,10 @@ describe('Disponibilidad', () => {
     expect(raiz.querySelectorAll('.franja')).toHaveLength(0);
   });
 
-  it('el conmutador de quince minutos reexpande sin volver a pedir', async () => {
+  it('el bloque de media hora conserva los inicios exactos que contiene', async () => {
+    // Es lo que hace inofensivo agrupar, y por lo que la pantalla no ofrece
+    // elegir el paso: la hora de las nueve y cuarto no desaparece al colapsarse
+    // bajo la de las nueve, sigue dentro del bloque y el dialogo la ofrece.
     componente.formulario.patchValue({
       tratamientoId: 'tra-1',
       dia: DIA,
@@ -419,11 +460,8 @@ describe('Disponibilidad', () => {
     httpMock.expectOne((r) => r.url === API).flush(RESPUESTA);
     await fixture.whenStable();
 
-    componente.paso.set(15);
-
-    expect(componente.dias()[0].bloques.map((b) => b.inicio)).toEqual(['09:00', '09:15', '09:30']);
-    // Agrupar es cliente: ninguna peticion nueva.
-    httpMock.verify();
+    expect(componente.dias()[0].bloques[0].inicios).toEqual(['09:00', '09:15']);
+    expect(componente.dias()[0].bloques[1].inicios).toEqual(['09:30']);
   });
 
   it('el dia elegido viaja en los dos extremos del rango', async () => {
@@ -492,18 +530,6 @@ describe('Disponibilidad', () => {
     expect(componente.puedeReservar()).toBe(true);
     expect(raiz.querySelectorAll('button.franja').length).toBeGreaterThan(0);
     expect(raiz.querySelector('button.franja')?.getAttribute('aria-label')).toContain('Reservar');
-  });
-
-  it('para el ODONTOLOGO la franja es informacion, no un boton', async () => {
-    // Reservar en nombre de otro es HU-14: un boton que devolviera 403 al
-    // pulsarlo seria un fallo de diseno, no una barrera.
-    await montarComo('ODONTOLOGO');
-    await consultarConResultado();
-
-    const raiz = fixture.nativeElement as HTMLElement;
-    expect(componente.puedeReservar()).toBe(false);
-    expect(raiz.querySelectorAll('button.franja')).toHaveLength(0);
-    expect(raiz.querySelectorAll('.franja').length).toBeGreaterThan(0);
   });
 
   it('HU-14: para RECEPCIONISTA sin paciente elegido la franja todavia no es un boton', async () => {
@@ -607,5 +633,32 @@ describe('Disponibilidad', () => {
     expect(componente.ultimaReserva()).toBeNull();
     expect(abiertos).toHaveLength(1);
     httpMock.verify();
+  });
+
+  // ------------------------------------------------------------------
+  // Los dias en que no se atiende
+  // ------------------------------------------------------------------
+
+  it('el calendario no admite el domingo ni un feriado', async () => {
+    await montarComo('PACIENTE');
+
+    const admite = componente.soloDiasConAtencion();
+    // 2026-10-12 es lunes; el 11, domingo.
+    expect(admite(new Date(2026, 9, 12))).toBe(true);
+    expect(admite(new Date(2026, 9, 11))).toBe(false);
+    expect(admite(new Date(2026, 6, 28))).toBe(false);
+  });
+
+  it('elegir odontologo estrecha el calendario a los dias de esa persona', async () => {
+    await montarComo('PACIENTE');
+
+    componente.formulario.patchValue({ odontologoId: 'odo-1' });
+    await fixture.whenStable();
+
+    // Juan no atiende los martes: ofrecerlo devolveria una lista vacia que
+    // parece un fallo del sistema y no un dia sin consulta.
+    const admite = componente.soloDiasConAtencion();
+    expect(admite(new Date(2026, 9, 12))).toBe(true);
+    expect(admite(new Date(2026, 9, 13))).toBe(false);
   });
 });
