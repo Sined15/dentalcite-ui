@@ -6,12 +6,11 @@ import { instanteLocal } from './repartir-citas';
  * atendidas.
  *
  * **Es una derivación, no un dato.** La API no tiene ningún endpoint de
- * «tratamientos recibidos»: el paciente no alcanza `/api/v1/planes/**` ni la
- * bitácora de una cita, y no hay notas clínicas. Lo único que puede leer de lo
- * suyo son sus citas, así que una sesión es una cita atendida y un tratamiento
- * recibido es el conjunto de las que comparten tratamiento. Si algún día el
- * servidor publica el avance de los planes (RN-14, HU-18), esta pantalla debería
- * leer eso en vez de deducirlo.
+ * «tratamientos recibidos», así que una sesión es una cita atendida y un
+ * tratamiento recibido es el conjunto de las que comparten tratamiento. Los
+ * planes sí traen su avance del servidor, y la pantalla lo lee de ahí; esto sigue
+ * deduciéndose porque no todo lo que se atiende tiene plan, y una limpieza suelta
+ * también es un tratamiento que el paciente ha recibido.
  *
  * De la cita solo viajan `{id, nombre}` del tratamiento —ni especialidad ni
  * duración—, y por eso no aparecen aquí: no se enseña lo que no se tiene.

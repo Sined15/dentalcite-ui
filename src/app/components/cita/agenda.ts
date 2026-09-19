@@ -215,14 +215,21 @@ function aIso(fecha: Date): string {
         <ng-container matColumnDef="acciones">
           <th mat-header-cell *matHeaderCellDef class="col-acciones">Acciones</th>
           <td mat-cell *matCellDef="let fila" class="col-acciones">
-            <button
-              mat-icon-button
-              type="button"
-              (click)="verHistorial(fila)"
-              [attr.aria-label]="'Ver el historial de ' + fila.codigo"
-            >
-              <mat-icon>history</mat-icon>
-            </button>
+            <!--
+              La bitacora y la cancelacion son de recepcion: al odontologo el
+              servidor le responde 403 en las dos, asi que en su agenda no se le
+              ofrecen. Lo que si le toca es registrar el resultado de las suyas.
+            -->
+            @if (!esOdontologo) {
+              <button
+                mat-icon-button
+                type="button"
+                (click)="verHistorial(fila)"
+                [attr.aria-label]="'Ver el historial de ' + fila.codigo"
+              >
+                <mat-icon>history</mat-icon>
+              </button>
+            }
             <!--
               HU-16: solo cuando la cita esta pendiente de cierre. El servidor
               responde 409 a una que aun no ha terminado, asi que ofrecer el boton
@@ -238,16 +245,18 @@ function aIso(fecha: Date): string {
                 <mat-icon>fact_check</mat-icon>
               </button>
             }
-            <button
-              mat-icon-button
-              type="button"
-              color="warn"
-              [disabled]="fila.estado !== 'CONFIRMADA'"
-              (click)="cancelar(fila)"
-              [attr.aria-label]="'Cancelar la cita ' + fila.codigo"
-            >
-              <mat-icon>event_busy</mat-icon>
-            </button>
+            @if (!esOdontologo) {
+              <button
+                mat-icon-button
+                type="button"
+                color="warn"
+                [disabled]="fila.estado !== 'CONFIRMADA'"
+                (click)="cancelar(fila)"
+                [attr.aria-label]="'Cancelar la cita ' + fila.codigo"
+              >
+                <mat-icon>event_busy</mat-icon>
+              </button>
+            }
           </td>
         </ng-container>
 

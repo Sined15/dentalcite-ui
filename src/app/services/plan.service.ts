@@ -2,7 +2,9 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { PageQuery, PageResponse } from '../core/http/api.types';
 import { CierreSesionRequest, Plan, PlanRequest, SuspensionRequest } from '../models';
+import { buildPageParams } from './pagination.util';
 
 /**
  * Planes de tratamiento (HU-17 · RF-23) · ODONTOLOGO y ADMINISTRADOR.
@@ -20,6 +22,25 @@ export class PlanService {
   deFicha(pacienteId: string): Observable<Plan[]> {
     return this.http.get<Plan[]>(this.url, {
       params: new HttpParams().set('pacienteId', pacienteId),
+    });
+  }
+
+  /**
+   * Un plan con su avance y todas sus sesiones. Al paciente y al odontologo un
+   * plan que no existe les responde 403, igual que uno ajeno; solo al
+   * administrador le responde 404.
+   */
+  obtener(id: string): Observable<Plan> {
+    return this.http.get<Plan>(`${this.url}/${id}`);
+  }
+
+  /**
+   * Los planes que sigue el odontologo autenticado: los que firmo y los de los
+   * pacientes con alguna cita suya sin cancelar. El orden lo fija el servidor.
+   */
+  seguimiento(soloActivos: boolean, pagina: PageQuery = {}): Observable<PageResponse<Plan>> {
+    return this.http.get<PageResponse<Plan>>(`${this.url}/seguimiento`, {
+      params: buildPageParams(pagina).set('soloActivos', String(soloActivos)),
     });
   }
 

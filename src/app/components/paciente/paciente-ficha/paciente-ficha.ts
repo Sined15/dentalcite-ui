@@ -203,6 +203,15 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                         @if (plan.motivoSuspension) {
                           <span class="estado">Motivo: {{ plan.motivoSuspension }}</span>
                         }
+                        <span>
+                          {{ plan.avance.completadas }} de {{ plan.sesionesPrevistas }}
+                          {{ plan.sesionesPrevistas === 1 ? 'completada' : 'completadas' }} ·
+                          <a
+                            [routerLink]="['/planes', plan.id]"
+                            [attr.aria-label]="'Ver el avance del plan de ' + plan.tratamiento.nombre"
+                            >Ver avance</a
+                          >
+                        </span>
 
                         <!--
                           El estado va escrito y no solo insinuado con estilo: quien

@@ -24,9 +24,14 @@ import { agruparTratamientosRecibidos } from './agrupar-tratamientos-recibidos';
  * y la agrupación vive aparte, en `agrupar-tratamientos-recibidos`, para poder
  * probarla sin montar la pantalla.
  *
- * <p>Debajo van sus planes de tratamiento, que ahora sí puede leer: de cada sesión
- * cerrada, qué cuidados le indicaron y cuándo volver. No lleva el avance como cifra
- * ni línea de tiempo, que es lo que trae su propia historia.
+ * <p>Debajo van sus planes de tratamiento, con el avance que cuenta el servidor y
+ * la fecha del próximo control que le indicaron por última vez. El detalle de cada
+ * sesión —cuándo se atendió y qué cuidados seguir— está en la línea de tiempo del
+ * plan, a la que lleva «Ver avance».
+ *
+ * <p>Las dos mitades salen de sitios distintos a propósito: los tratamientos
+ * recibidos se deducen de las citas atendidas porque también hay tratamientos sin
+ * plan, y el avance de un plan se lee del servidor porque es él quien lo cuenta.
  *
  * <p>No se anuncian especialidad ni duración: el resumen de la cita trae del
  * tratamiento solo su identificador y su nombre, y pedirlos al catálogo sería
@@ -100,40 +105,39 @@ import { agruparTratamientosRecibidos } from './agrupar-tratamientos-recibidos';
                   · {{ plan.activo ? 'En curso' : 'Suspendido' }}
                 </p>
                 <p class="quien">Con {{ plan.odontologo.nombre }}</p>
-
-                <ol class="mis-sesiones" [attr.aria-label]="'Sesiones de ' + plan.tratamiento.nombre">
-                  @for (sesion of plan.sesiones; track sesion.id) {
-                    <li>
-                      <span class="numero">Sesión {{ sesion.numero }}</span>
-                      @if (sesion.cita; as cita) {
-                        <span class="cuando">{{ cita.inicio | date: 'd MMM y' }}</span>
-                      } @else {
-                        <span class="cuando">Pendiente</span>
-                      }
-
-                      <!--
-                        Lo que le indicaron al terminar. Solo aparece en las
-                        cerradas: en las demas no hay nada que decir todavia.
-                      -->
-                      @if (sesion.recomendaciones.length > 0) {
-                        <ul class="indicado">
-                          @for (cuidado of sesion.recomendaciones; track cuidado.id) {
-                            <li>{{ cuidado.descripcion }}</li>
-                          }
-                        </ul>
-                      }
-                      @if (sesion.proximoControl; as control) {
-                        <span class="cuando">
-                          Próximo control: {{ control | date: 'd MMM y' }}
-                        </span>
-                      }
-                      @if (sesion.observacion; as nota) {
-                        <span class="cuando">{{ nota }}</span>
-                      }
-                    </li>
-                  }
-                </ol>
+                <p class="sesiones">
+                  <mat-icon aria-hidden="true">check_circle</mat-icon>
+                  {{ plan.avance.completadas }} de {{ plan.sesionesPrevistas }}
+                  {{ plan.sesionesPrevistas === 1 ? 'sesión completada' : 'sesiones completadas' }}
+                </p>
+                <mat-progress-bar
+                  mode="determinate"
+                  [value]="porcentaje(plan)"
+                  [attr.aria-label]="
+                    'Avance de ' +
+                    plan.tratamiento.nombre +
+                    ': ' +
+                    plan.avance.completadas +
+                    ' de ' +
+                    plan.sesionesPrevistas +
+                    ' sesiones'
+                  "
+                />
+                @if (ultimoControl(plan); as control) {
+                  <p class="cuando control">
+                    Próximo control: {{ control | date: "d 'de' MMMM 'de' y" }}
+                  </p>
+                }
               </mat-card-content>
+              <mat-card-actions>
+                <a
+                  mat-button
+                  [routerLink]="['/planes', plan.id]"
+                  [attr.aria-label]="'Ver el avance de ' + plan.tratamiento.nombre"
+                >
+                  Ver avance
+                </a>
+              </mat-card-actions>
             </mat-card>
           </li>
         }
@@ -160,26 +164,8 @@ import { agruparTratamientosRecibidos } from './agrupar-tratamientos-recibidos';
     .titulo-planes {
       margin: 1.5rem 0 0.75rem;
     }
-    .mis-sesiones {
-      margin: 0.5rem 0 0;
-      padding-left: 1.1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      font-size: 0.875rem;
-    }
-    .mis-sesiones .numero {
-      font-weight: 600;
-      display: block;
-    }
-    .mis-sesiones .cuando {
-      display: block;
-    }
-    /* Los cuidados indicados, uno por linea: encadenados no se leen. */
-    .indicado {
-      margin: 0.25rem 0;
-      padding-left: 1rem;
-      font-size: 0.8125rem;
+    .control {
+      margin-top: 0.5rem;
     }
     .sesiones {
       display: flex;
@@ -227,6 +213,24 @@ export class MisTratamientos {
   constructor() {
     this.cargar();
     this.cargarPlanes();
+  }
+
+  protected porcentaje(plan: Plan): number {
+    return plan.sesionesPrevistas > 0
+      ? (plan.avance.completadas * 100) / plan.sesionesPrevistas
+      : 0;
+  }
+
+  /**
+   * La fecha de volver que le dieron al cerrar la última sesión. Las anteriores ya
+   * no le sirven: cada cierre sustituye la indicación del anterior.
+   */
+  protected ultimoControl(plan: Plan): string | null {
+    const cerradas = plan.sesiones.filter((s) => s.proximoControl !== null);
+    if (cerradas.length === 0) {
+      return null;
+    }
+    return cerradas.reduce((a, b) => (b.numero > a.numero ? b : a)).proximoControl;
   }
 
   /**

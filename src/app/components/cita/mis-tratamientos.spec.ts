@@ -26,6 +26,7 @@ const PLAN: Plan = {
   activo: true,
   motivoSuspension: null,
   creadoEn: '2026-09-01T09:00:00Z',
+  avance: { completadas: 1, pendientes: 2 },
   sesiones: [
     {
       id: 'ses-1',
@@ -149,19 +150,41 @@ describe('MisTratamientos', () => {
   });
 
   // ------------------------------------------------------------------
-  // Lo que le indicaron al cerrar cada sesión
+  // El avance de sus planes
   // ------------------------------------------------------------------
 
-  it('muestra de cada sesion cerrada sus recomendaciones y el proximo control', async () => {
+  it('muestra el avance que cuenta el servidor y el ultimo proximo control', async () => {
     await montar([], [PLAN]);
 
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(texto).toContain('Ortodoncia');
-    expect(texto).toContain('Mantener dieta blanda');
-    expect(texto).toContain('Próximo control');
-    expect(texto).toContain('Volver antes si hay dolor');
-    // La que sigue pendiente no promete nada todavía.
-    expect(texto).toContain('Pendiente');
+    expect(texto).toContain('1 de 3 sesiones completadas');
+    expect(texto).toContain('Próximo control: 15 de octubre de 2026');
+  });
+
+  it('lee la cifra del servidor y no la cuenta sobre las sesiones', async () => {
+    // Si el cliente contara, dos fórmulas darían dos cifras el día que difieran.
+    await montar([], [{ ...PLAN, avance: { completadas: 2, pendientes: 1 } }]);
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      '2 de 3 sesiones completadas',
+    );
+  });
+
+  it('enlaza cada plan con su linea de tiempo', async () => {
+    await montar([], [PLAN]);
+
+    const enlace = (fixture.nativeElement as HTMLElement).querySelector(
+      'a[aria-label="Ver el avance de Ortodoncia"]',
+    );
+    expect(enlace?.getAttribute('href')).toBe('/planes/plan-1');
+  });
+
+  it('anuncia la barra de avance con su cifra', async () => {
+    await montar([], [PLAN]);
+
+    const barra = (fixture.nativeElement as HTMLElement).querySelector('mat-progress-bar');
+    expect(barra?.getAttribute('aria-label')).toBe('Avance de Ortodoncia: 1 de 3 sesiones');
   });
 
   it('sin planes no pinta la seccion', async () => {

@@ -17,6 +17,7 @@ const PLAN: Plan = {
   activo: true,
   motivoSuspension: null,
   creadoEn: '2026-09-01T09:00:00Z',
+  avance: { completadas: 0, pendientes: 6 },
   sesiones: [1, 2, 3, 4, 5, 6].map((numero) => ({
     id: `ses-${numero}`,
     numero,

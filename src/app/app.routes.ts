@@ -19,6 +19,10 @@ const RESERVAN = ['PACIENTE', 'RECEPCIONISTA', 'ADMINISTRADOR'] as const;
 // La agenda de la clinica es otra pantalla y otro rol.
 const SOLO_PACIENTE = ['PACIENTE'] as const;
 const ADMIN = ['ADMINISTRADOR'] as const;
+// Quien lee el avance de un plan: el paciente los suyos, el odontologo los de sus
+// pacientes y administracion todos. Recepcion no trabaja con planes.
+const LEEN_PLANES = ['PACIENTE', 'ODONTOLOGO', 'ADMINISTRADOR'] as const;
+const SOLO_ODONTOLOGO = ['ODONTOLOGO'] as const;
 
 export const routes: Routes = [
   // Rutas publicas: no pasan por el shell ni por los guards.
@@ -258,6 +262,26 @@ export const routes: Routes = [
         data: { roles: SOLO_PACIENTE },
         loadComponent: () =>
           import('./components/cita/mis-tratamientos').then((m) => m.MisTratamientos),
+      },
+
+      // El avance de un plan y su linea de tiempo. La abren el paciente, el
+      // odontologo y administracion, pero no sobre cualquier plan: cual puede
+      // leer cada uno lo decide el servidor con un 403.
+      {
+        path: 'planes/:id',
+        canActivate: [rolGuard],
+        data: { roles: LEEN_PLANES },
+        loadComponent: () => import('./components/plan/plan-avance').then((m) => m.PlanAvance),
+      },
+
+      // Los planes de los pacientes del odontologo. Solo suyo: recepcion no
+      // planifica y administracion los ve desde la ficha de cada paciente.
+      {
+        path: 'seguimiento',
+        canActivate: [rolGuard],
+        data: { roles: SOLO_ODONTOLOGO },
+        loadComponent: () =>
+          import('./components/plan/seguimiento-planes').then((m) => m.SeguimientoPlanes),
       },
 
       // HU-13 · RF-07: la busqueda es del personal.

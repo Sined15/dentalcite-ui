@@ -135,6 +135,14 @@ const MENU: readonly EntradaMenu[] = [
     icono: 'fact_check',
     roles: ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'],
   },
+  // Cómo van los tratamientos de sus pacientes, sin tener que abrir las fichas
+  // una por una.
+  {
+    ruta: '/seguimiento',
+    etiqueta: 'Seguimiento de tratamientos',
+    icono: 'insights',
+    roles: ['ODONTOLOGO'],
+  },
   {
     ruta: null,
     etiqueta: 'Citas',

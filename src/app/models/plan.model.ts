@@ -43,11 +43,20 @@ export interface PlanSesion {
 }
 
 /**
+ * Cuántas sesiones se han cumplido y cuántas faltan. Las completadas son las que
+ * ocupa una cita atendida, se hayan cerrado ya o no.
+ */
+export interface PlanAvance {
+  completadas: number;
+  pendientes: number;
+}
+
+/**
  * Un plan de tratamiento (HU-17 · RF-23).
  *
- * **No lleva el avance como cifra.** Se cuenta sobre las sesiones, que traen la
- * cita que las ocupa, y un campo que lo resumiera seria otro dato que mantener
- * de acuerdo con ellas.
+ * El avance lo cuenta el servidor sobre las sesiones cada vez que responde, y aqui
+ * se lee tal cual: contarlo tambien en el cliente seria tener la misma cifra con
+ * dos formulas.
  */
 export interface Plan {
   id: string;
@@ -61,7 +70,16 @@ export interface Plan {
   motivoSuspension: string | null;
   /** Instante ISO con desfase. */
   creadoEn: string;
+  avance: PlanAvance;
   sesiones: PlanSesion[];
+}
+
+/**
+ * Las sesiones atendidas a las que aun no se les ha dicho que cuidados seguir: las
+ * que la linea de tiempo y el seguimiento señalan como pendientes de cierre.
+ */
+export function sesionesPorCerrar(plan: Plan): number {
+  return plan.sesiones.filter((s) => s.estado === 'ATENDIDA').length;
 }
 
 /**

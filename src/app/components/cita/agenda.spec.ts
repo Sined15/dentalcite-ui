@@ -464,6 +464,19 @@ describe('Agenda', () => {
     expect(componente.columnas).not.toContain('odontologo');
   });
 
+  it('como odontologo no ofrece cancelar ni ver la bitacora', async () => {
+    montarComoOdontologo();
+    httpMock.expectOne((r) => r.url === API).flush(pagina([cita('c-1', '09:00:00')]));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Las dos son de recepcion y el servidor le responde 403: un boton que
+    // solo puede fallar no se pinta.
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(raiz.querySelector('button[aria-label^="Cancelar la cita"]')).toBeNull();
+    expect(raiz.querySelector('button[aria-label^="Ver el historial"]')).toBeNull();
+  });
+
   it('como odontologo la pantalla se titula «Mi agenda»', async () => {
     montarComoOdontologo();
     httpMock.expectOne((r) => r.url === API).flush(pagina([]));

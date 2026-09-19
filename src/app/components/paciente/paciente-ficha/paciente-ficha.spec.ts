@@ -77,6 +77,7 @@ const PLAN: Plan = {
   activo: true,
   motivoSuspension: null,
   creadoEn: '2026-09-01T09:00:00Z',
+  avance: { completadas: 0, pendientes: 6 },
   sesiones: [1, 2, 3, 4, 5, 6].map((numero) => ({
     id: `ses-${numero}`,
     numero,
@@ -267,6 +268,24 @@ describe('PacienteFicha', () => {
     expect(raiz.textContent).toContain('Ortodoncia');
     expect(raiz.textContent).toContain('6 sesiones previstas');
     expect(raiz.querySelector('button[aria-label^="Suspender el plan"]')).not.toBeNull();
+  });
+
+  it('de cada plan da el avance y enlaza con su linea de tiempo', async () => {
+    montar('ODONTOLOGO');
+    httpMock.expectOne(URL).flush(DETALLE);
+    httpMock
+      .expectOne((r) => r.url === URL_PLANES)
+      .flush([{ ...PLAN, avance: { completadas: 2, pendientes: 4 } }]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    expect(raiz.textContent).toContain('2 de 6 completadas');
+    expect(
+      raiz
+        .querySelector('a[aria-label="Ver el avance del plan de Ortodoncia"]')
+        ?.getAttribute('href'),
+    ).toBe(`/planes/${PLAN.id}`);
   });
 
   it('HU-17: un plan suspendido no ofrece volver a suspenderse', async () => {

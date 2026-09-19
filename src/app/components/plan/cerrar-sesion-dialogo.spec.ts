@@ -37,6 +37,7 @@ const PLAN: Plan = {
   activo: true,
   motivoSuspension: null,
   creadoEn: '2026-09-01T09:00:00Z',
+  avance: { completadas: 1, pendientes: 2 },
   sesiones: [sesion(1, 'ATENDIDA'), sesion(2, 'PENDIENTE'), sesion(3, 'PENDIENTE')],
 };
 
