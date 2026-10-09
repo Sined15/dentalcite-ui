@@ -17,7 +17,6 @@ export class UsuarioService {
   private readonly http = inject(HttpClient);
   private readonly url = `${environment.apiUrl}/api/v1/usuarios`;
 
-  /** GET /me. Accesible a cualquier rol autenticado, sobre su propia cuenta. */
   obtenerPerfilPropio(): Observable<Usuario> {
     return this.http.get<Usuario>(`${this.url}/me`);
   }
@@ -26,25 +25,18 @@ export class UsuarioService {
     return this.http.get<PageResponse<Usuario>>(this.url, { params: buildPageParams(query) });
   }
 
-  /** A diferencia del catalogo, aqui GET /{id} si existe. */
   obtener(id: string): Observable<Usuario> {
     return this.http.get<Usuario>(`${this.url}/${id}`);
   }
 
-  /**
-   * El alta puede devolver `passwordProvisional` cuando no se indico ninguna.
-   * Es la unica vez que existe en claro.
-   */
   crear(body: UsuarioRequest): Observable<Usuario> {
     return this.http.post<Usuario>(this.url, body);
   }
 
-  /** PUT: reemplazo total, los tres campos obligatorios. */
   reemplazar(id: string, body: UsuarioReplaceRequest): Observable<Usuario> {
     return this.http.put<Usuario>(`${this.url}/${id}`, body);
   }
 
-  /** PATCH: actualizacion parcial. La baja logica es `{ activo: false }`. */
   actualizar(id: string, body: UsuarioUpdateRequest): Observable<Usuario> {
     return this.http.patch<Usuario>(`${this.url}/${id}`, body);
   }
@@ -57,7 +49,6 @@ export class UsuarioService {
     return this.http.post<void>(`${this.url}/${id}/password-provisional`, { password });
   }
 
-  /** Unica ruta permitida mientras el token exija cambio de contraseña. */
   cambiarPasswordPropio(body: CambioPasswordRequest): Observable<void> {
     return this.http.post<void>(`${this.url}/me/password`, body);
   }

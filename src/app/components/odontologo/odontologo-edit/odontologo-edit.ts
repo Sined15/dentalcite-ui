@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
@@ -16,24 +17,9 @@ import { EspecialidadService } from '../../../services/especialidad.service';
 import { OdontologoService } from '../../../services/odontologo.service';
 import { UsuarioService } from '../../../services/usuario.service';
 import { buscarEnPaginas, cargarTodasLasPaginas } from '../../../shared/buscar-en-paginas';
+import { visualDeEspecialidad } from '../../../shared/especialidad-visual';
 import { PasswordGeneradaDialogo } from '../../usuario/password-generada-dialogo';
 
-/**
- * Alta y edicion del odontologo.
- *
- * <p>El alta es de una sola pantalla a proposito. El profesional es el sujeto y
- * la cuenta es lo que se le cuelga, no al contrario: antes habia que empezar en
- * «Cuentas de acceso», crear alli una cuenta con documento y volver aqui a
- * elegir su ficha en un desplegable, de modo que nadie podia existir como
- * profesional hasta tener credenciales. Ahora este formulario recoge las dos
- * mitades y encadena las dos llamadas.
- *
- * <p>El orden no es negociable: primero la cuenta, porque el registro del
- * profesional exige que la ficha ya tenga una de rol odontologo y la rechaza si
- * no. Como son dos llamadas, no es atomico; el segundo modo de alta —el que
- * recibe una ficha ya creada— es lo que permite terminar el trabajo cuando el
- * segundo paso falla, y el listado de cuentas marca las que quedaron a medias.
- */
 @Component({
   selector: 'app-odontologo-edit',
   imports: [
@@ -43,12 +29,13 @@ import { PasswordGeneradaDialogo } from '../../usuario/password-generada-dialogo
     MatFormFieldModule,
     MatInputModule,
     MatProgressBarModule,
+    MatIconModule,
     MatSelectModule,
   ],
   template: `
     <h1>{{ titulo() }}</h1>
 
-    <mat-card class="tarjeta">
+    <mat-card class="tarjeta" appearance="outlined">
       @if (cargando()) {
         <mat-progress-bar mode="indeterminate" aria-label="Guardando" />
       }
@@ -93,24 +80,12 @@ import { PasswordGeneradaDialogo } from '../../usuario/password-generada-dialogo
           </div>
 
           @if (esEdicion()) {
-            <!--
-              La ficha queda fijada al registrar: es el vinculo por el que su
-              cuenta resuelve a este registro, y repuntarla trasladaria su agenda
-              a otra persona. El servidor lo rechaza, asi que aqui es de solo
-              lectura.
-            -->
             <mat-form-field appearance="outline">
               <mat-label>Ficha vinculada</mat-label>
               <input matInput [value]="formulario.controls.fichaId.value" disabled />
               <mat-hint>La ficha no se puede cambiar una vez registrado</mat-hint>
             </mat-form-field>
           } @else if (!modoCompletar()) {
-            <!--
-              La cuenta con la que entrara al sistema. El documento es lo que crea
-              o vincula su ficha, y sin ficha su cuenta no resolveria a este
-              registro: no podria declarar su horario, ver su agenda ni cerrar sus
-              citas.
-            -->
             <h2 class="seccion">Cuenta de acceso</h2>
 
             <mat-form-field appearance="outline">
@@ -151,7 +126,7 @@ import { PasswordGeneradaDialogo } from '../../usuario/password-generada-dialogo
                 formControlName="passwordProvisional"
                 autocomplete="off"
               />
-              <mat-hint>Si la dejas vacia, el sistema la genera y la muestra una sola vez</mat-hint>
+              <mat-hint>Si la dejas vacía, el sistema la genera y la muestra una sola vez</mat-hint>
               @if (formulario.controls.passwordProvisional.hasError('minlength')) {
                 <mat-error>Debe tener al menos 8 caracteres</mat-error>
               }
@@ -160,23 +135,39 @@ import { PasswordGeneradaDialogo } from '../../usuario/password-generada-dialogo
             <h2 class="seccion">Registro profesional</h2>
           }
 
-          <mat-form-field appearance="outline">
-            <mat-label>Especialidades</mat-label>
-            <mat-select formControlName="especialidadesIds" multiple>
+          <fieldset class="especialidades" aria-describedby="ayuda-especialidades">
+            <legend>Especialidades</legend>
+            <div class="opciones">
               @for (esp of especialidades(); track esp.id) {
-                <mat-option [value]="esp.id">{{ esp.nombre }}</mat-option>
+                <button
+                  type="button"
+                  class="opcion"
+                  [class.elegida]="estaElegida(esp.id)"
+                  [attr.data-spec]="visual(esp).clave"
+                  [attr.aria-pressed]="estaElegida(esp.id)"
+                  (click)="alternarEspecialidad(esp.id)"
+                >
+                  <span class="dc-spec-tile" aria-hidden="true">
+                    <mat-icon>{{ visual(esp).icono }}</mat-icon>
+                  </span>
+                  <span class="nombre-opcion">{{ esp.nombre }}</span>
+                  <span class="marca-elegida" aria-hidden="true">
+                    <mat-icon>check</mat-icon>
+                  </span>
+                </button>
               }
-            </mat-select>
-            <mat-hint>Determinan qué tratamientos se le pueden asignar</mat-hint>
-            @if (formulario.controls.especialidadesIds.hasError('required')) {
-              <mat-error>Debes asignar al menos una especialidad</mat-error>
+            </div>
+            <p class="ayuda-especialidades" id="ayuda-especialidades">
+              Determinan qué tratamientos se le pueden asignar.
+            </p>
+            @if (
+              formulario.controls.especialidadesIds.touched &&
+              formulario.controls.especialidadesIds.hasError('required')
+            ) {
+              <p class="error" role="alert">Debes asignar al menos una especialidad</p>
             }
-          </mat-form-field>
+          </fieldset>
 
-          <!--
-            La imagen con la que se presenta al publico. Es una ruta, no una
-            subida; las de demostracion viajan con este cliente.
-          -->
           <mat-form-field appearance="outline">
             <mat-label>Imagen (opcional)</mat-label>
             <input matInput formControlName="imagenUrl" placeholder="/img/catalogo/ejemplo.svg" />
@@ -191,7 +182,6 @@ import { PasswordGeneradaDialogo } from '../../usuario/password-generada-dialogo
             <button mat-button type="button" (click)="cancelar()">Cancelar</button>
             <button
               mat-flat-button
-              color="primary"
               type="submit"
               [disabled]="formulario.invalid || cargando()"
             >
@@ -204,12 +194,12 @@ import { PasswordGeneradaDialogo } from '../../usuario/password-generada-dialogo
   `,
   styles: `
     h1 {
-      font-size: 1.5rem;
-      margin: 0 0 1rem;
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
+      margin: 0 0 var(--space-5);
     }
     .seccion {
-      font-size: 1rem;
-      font-weight: 500;
+      font: var(--text-title-md);
       margin: 1rem 0 0.5rem;
     }
     .tarjeta {
@@ -234,16 +224,84 @@ import { PasswordGeneradaDialogo } from '../../usuario/password-generada-dialogo
       gap: 0.5rem;
       margin-top: 1rem;
     }
+    @media (max-width: 30rem) {
+      .acciones {
+        flex-direction: column-reverse;
+      }
+      .acciones button {
+        width: 100%;
+      }
+    }
     .error {
-      color: var(--mat-sys-error, #b3261e);
-      font-size: 0.875rem;
+      color: var(--danger-ink);
+      font: var(--text-body-sm);
     }
     .aviso {
-      background: var(--mat-sys-surface-container, #eee);
-      padding: 0.75rem 1rem;
-      border-radius: 0.5rem;
-      font-size: 0.875rem;
+      background: var(--accent-soft);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      font: var(--text-body-sm);
       margin: 0 0 1rem;
+    }
+    .especialidades {
+      border: none;
+      margin: 0 0 var(--space-4);
+      padding: 0;
+    }
+    .especialidades legend {
+      font: var(--text-label);
+      margin-bottom: var(--space-2);
+      padding: 0;
+    }
+    .opciones {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+      gap: var(--space-3);
+    }
+    .opcion {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      min-height: 3.5rem;
+      padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      color: var(--ink);
+      font: 500 0.875rem/1.2 var(--font-sans);
+      text-align: left;
+      cursor: pointer;
+    }
+    .opcion.elegida {
+      border-color: var(--brand);
+      background: var(--brand-soft);
+    }
+    .nombre-opcion {
+      flex: 1;
+    }
+    .marca-elegida {
+      width: 1.375rem;
+      height: 1.375rem;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--border-strong);
+      border-radius: var(--radius-xs);
+      color: transparent;
+    }
+    .marca-elegida mat-icon {
+      width: 1rem;
+      height: 1rem;
+      font-size: 1rem;
+    }
+    .elegida .marca-elegida {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: var(--on-brand);
+    }
+    .ayuda-especialidades {
+      margin: var(--space-2) 0 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
   `,
 })
@@ -267,11 +325,22 @@ export class OdontologoEdit {
   protected readonly error = signal<string | null>(null);
   protected readonly especialidades = signal<Especialidad[]>([]);
 
-  /**
-   * La ficha que llega desde el listado de cuentas cuando se viene a terminar el
-   * registro de una cuenta que quedo a medias. Su presencia es lo que distingue
-   * los dos modos del alta.
-   */
+  protected visual(especialidad: Especialidad) {
+    return visualDeEspecialidad(especialidad.nombre);
+  }
+
+  protected estaElegida(id: string): boolean {
+    return this.formulario.controls.especialidadesIds.value.includes(id);
+  }
+
+  protected alternarEspecialidad(id: string): void {
+    const control = this.formulario.controls.especialidadesIds;
+    const actuales = control.value;
+    control.setValue(actuales.includes(id) ? actuales.filter((e) => e !== id) : [...actuales, id]);
+    control.markAsTouched();
+    control.markAsDirty();
+  }
+
   private readonly fichaDada = (this.estado?.['fichaId'] as string | undefined) ?? null;
 
   protected readonly nombreDeLaCuenta = (this.estado?.['nombre'] as string | undefined) ?? '';
@@ -285,13 +354,10 @@ export class OdontologoEdit {
     return this.modoCompletar() ? 'Completar registro profesional' : 'Registrar odontólogo';
   });
 
-  /** Las colegiaturas ya usadas, para no llegar a crear la cuenta de un COP repetido. */
   private readonly copsUsados = signal<ReadonlySet<string>>(new Set());
 
-  /** Las fichas que ya tienen registro profesional: no admiten un segundo enlace. */
   private readonly fichasOcupadas = signal<ReadonlySet<string>>(new Set());
 
-  /** La cuenta del primer paso, para mostrar su contraseña cuando todo acabe bien. */
   private cuentaCreada: Usuario | null = null;
 
   protected readonly formulario = this.fb.nonNullable.group({
@@ -325,8 +391,6 @@ export class OdontologoEdit {
       this.formulario.controls.fichaId.setValue(this.fichaDada);
       this.formulario.controls.fichaId.addValidators(Validators.required);
     } else {
-      // El alta completa crea tambien la cuenta, y esos tres campos son los que
-      // la componen.
       this.formulario.controls.correo.addValidators([Validators.required, Validators.email]);
       this.formulario.controls.documento.addValidators(Validators.required);
       this.formulario.controls.tipoDocumento.addValidators(Validators.required);
@@ -375,7 +439,6 @@ export class OdontologoEdit {
     });
   }
 
-  /** Se leen `especialidades` anidadas y se escriben `especialidadesIds`. */
   private rellenar(fila: Odontologo): void {
     this.formulario.patchValue({
       cop: fila.cop,
@@ -401,8 +464,6 @@ export class OdontologoEdit {
       return;
     }
 
-    // La colegiatura repetida es la causa mas probable de que falle el registro,
-    // y atajarla aqui evita crear una cuenta que se quedaria suelta.
     if (this.copsUsados().has(valores.cop.trim())) {
       this.error.set('Ya existe un odontólogo con ese COP.');
       return;
@@ -416,10 +477,6 @@ export class OdontologoEdit {
       return;
     }
 
-    // Reintento despues de que fallara el segundo paso: la cuenta ya existe, y
-    // volver a crearla con el mismo correo solo daria un conflicto. Sin esto,
-    // pulsar Guardar otra vez —que es lo que cualquiera hace tras corregir el
-    // COP— dejaba el alta atascada en un 409 que no explicaba nada.
     const yaCreada = this.cuentaCreada;
     if (yaCreada?.fichaId) {
       this.guardarProfesional(null, yaCreada.fichaId);
@@ -429,10 +486,6 @@ export class OdontologoEdit {
     this.crearCuenta();
   }
 
-  /**
-   * Primer paso del alta: la cuenta con la que entrara al sistema. Su respuesta
-   * trae la ficha, que es lo que el registro profesional necesita.
-   */
   private crearCuenta(): void {
     const valores = this.formulario.getRawValue();
 
@@ -465,15 +518,8 @@ export class OdontologoEdit {
       });
   }
 
-  /**
-   * Segundo paso del alta —o la edicion, que es una sola llamada—. Si esto falla
-   * despues de haber creado la cuenta, el mensaje lo dice: la persona ya puede
-   * entrar al sistema, pero todavia no es odontologo para el.
-   */
   private guardarProfesional(id: string | null, fichaId: string): void {
     const valores = this.formulario.getRawValue();
-    // El PUT reemplaza el recurso entero: mandar la imagen vacia la borraria, y
-    // no mandarla, tambien.
     const cuerpo = {
       cop: valores.cop,
       nombres: valores.nombres,
@@ -516,11 +562,6 @@ export class OdontologoEdit {
     });
   }
 
-  /**
-   * El conflicto con enjundia del primer paso: la persona ya tiene cuenta, casi
-   * siempre porque se registro antes como paciente. No se le puede crear otra, y
-   * la salida es cambiarle el rol y volver a terminar el registro.
-   */
   private mensajeDelAltaDeCuenta(err: unknown): string {
     const base = mensajeDeError(err);
     if (err instanceof HttpErrorResponse && err.status === 409) {

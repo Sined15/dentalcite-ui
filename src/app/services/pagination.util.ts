@@ -1,7 +1,6 @@
 import { HttpParams } from '@angular/common/http';
 import { PageQuery } from '../core/http/api.types';
 
-/** Construye `page`, `size` y `sort` omitiendo lo que no venga. */
 export function buildPageParams(query: PageQuery = {}): HttpParams {
   let params = new HttpParams()
     .set('page', String(query.page ?? 0))

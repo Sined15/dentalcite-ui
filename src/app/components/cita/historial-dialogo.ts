@@ -11,13 +11,6 @@ export interface HistorialDialogoDatos {
   cita: CitaResumen;
 }
 
-/**
- * La bitacora de una cita (HU-11 · RF-21).
- *
- * Como RN-12 impide borrar nada, esta es la unica forma de saber que le paso a
- * una cita y por orden de quien. Se presenta como linea de tiempo y no como
- * tabla porque lo que importa es el orden, no comparar columnas.
- */
 @Component({
   selector: 'app-historial-dialogo',
   imports: [DatePipe, MatButtonModule, MatDialogModule, MatProgressBarModule],
@@ -65,7 +58,7 @@ export interface HistorialDialogoDatos {
       list-style: none;
       margin: 0;
       padding: 0 0 0 1rem;
-      border-left: 2px solid var(--mat-sys-outline-variant, #cac4d0);
+      border-left: 2px solid var(--border);
     }
     .linea li {
       padding: 0 0 1.25rem 1rem;
@@ -79,24 +72,27 @@ export interface HistorialDialogoDatos {
       width: 0.7rem;
       height: 0.7rem;
       border-radius: 50%;
-      background: var(--mat-sys-primary, #6750a4);
+      background: var(--brand);
     }
     .estado {
       margin: 0;
-      font-weight: 600;
+      font-weight: 500;
     }
     .cuando,
     .quien {
-      margin: 0.15rem 0 0;
-      font-size: 0.875rem;
-      opacity: 0.75;
+      margin: 2px 0 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
     .motivo {
-      margin: 0.35rem 0 0;
-      font-style: italic;
+      margin: var(--space-2) 0 0;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      background: var(--surface-sunken);
+      font: var(--text-body-sm);
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
   `,
 })

@@ -62,11 +62,6 @@ describe('PacienteEdit', () => {
     });
   }
 
-  /**
-   * RNF-06. El servidor responde 400 igualmente, pero dejar que la peticion
-   * salga para eso significa perder el tiempo del paciente que espera en el
-   * mostrador.
-   */
   it('sin el consentimiento del titular no llega a enviar nada', () => {
     rellenar(false);
     expect(componente.formulario.invalid).toBe(true);
@@ -83,11 +78,9 @@ describe('PacienteEdit', () => {
     expect(req.request.method).toBe('POST');
     req.flush(REGISTRADO);
 
-    // Listo para el siguiente paciente, y el consentimiento vuelve a exigirse.
     expect(componente.formulario.controls.consentimientoAceptado.value).toBe(false);
   });
 
-  /** RN-10: el par (tipo, numero) ya existe. El mensaje del servidor es el util. */
   it('muestra el mensaje del 409 cuando el documento ya esta registrado', () => {
     rellenar(true);
     componente.enviar();

@@ -15,6 +15,7 @@ import { Especialidad } from '../../models';
 import { EspecialidadService } from '../../services/especialidad.service';
 import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
 import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo';
+import { visualDeEspecialidad } from '../../shared/especialidad-visual';
 
 @Component({
   selector: 'app-especialidad-list',
@@ -31,14 +32,28 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
   ],
   template: `
     <header class="cabecera">
-      <h1>Especialidades</h1>
+      <div class="dc-titular">
+        <h1>Especialidades</h1>
+        <p class="dc-subtitulo">
+          Las áreas en que se organiza la clínica. Cada tratamiento y cada odontólogo cuelga de
+          una o varias.
+        </p>
+      </div>
       @if (puedeEscribir()) {
-        <a mat-flat-button color="primary" routerLink="/especialidades/nuevo">
+        <a mat-flat-button routerLink="/especialidades/nuevo">
           <mat-icon>add</mat-icon>
           Nueva especialidad
         </a>
       }
     </header>
+
+    <p class="dc-aviso">
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <span>
+        El color y el icono de cada especialidad son fijos en toda la aplicación, para que se
+        reconozcan antes de leer. No se eligen aquí.
+      </span>
+    </p>
 
     <mat-form-field appearance="outline" class="filtro">
       <mat-label>Filtrar por nombre</mat-label>
@@ -54,45 +69,58 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de especialidades">
+    <div class="tabla-scroll tabla-apilable" tabindex="0" role="region" aria-label="Tabla de especialidades">
       <table mat-table [dataSource]="pagina()">
         <ng-container matColumnDef="nombre">
           <th mat-header-cell *matHeaderCellDef>Nombre</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.nombre }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Nombre">
+            <span class="especialidad" [attr.data-spec]="visual(fila).clave">
+              <span class="dc-spec-tile" aria-hidden="true">
+                <mat-icon>{{ visual(fila).icono }}</mat-icon>
+              </span>
+              {{ fila.nombre }}
+            </span>
+          </td>
         </ng-container>
 
         <ng-container matColumnDef="descripcion">
-          <th mat-header-cell *matHeaderCellDef>Descripcion</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.descripcion || '—' }}</td>
+          <th mat-header-cell *matHeaderCellDef>Descripción</th>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Descripción">{{ fila.descripcion || '—' }}</td>
         </ng-container>
 
         <ng-container matColumnDef="activo">
           <th mat-header-cell *matHeaderCellDef>Estado</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.activo ? 'Activa' : 'De baja' }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Estado"><span class="dc-estado" [class.dc-estado--ok]="fila.activo" [class.dc-estado--error]="!fila.activo"><mat-icon aria-hidden="true">{{ fila.activo ? 'check_circle' : 'block' }}</mat-icon>{{ fila.activo ? 'Activa' : 'De baja' }}</span></td>
         </ng-container>
 
         <ng-container matColumnDef="acciones">
           <th mat-header-cell *matHeaderCellDef class="col-acciones">Acciones</th>
           <td mat-cell *matCellDef="let fila" class="col-acciones">
             @if (puedeEscribir()) {
-              <button
-                mat-icon-button
-                type="button"
-                (click)="editar(fila)"
-                [attr.aria-label]="'Editar ' + fila.nombre"
-              >
-                <mat-icon>edit</mat-icon>
-              </button>
-              <button
-                mat-icon-button
-                type="button"
-                color="warn"
-                [disabled]="!fila.activo"
-                (click)="darDeBaja(fila)"
-                [attr.aria-label]="'Dar de baja ' + fila.nombre"
-              >
-                <mat-icon>block</mat-icon>
-              </button>
+              <span class="dc-acciones">
+                <button
+                  mat-stroked-button
+                  class="dc-accion"
+                  type="button"
+                  (click)="editar(fila)"
+                  [attr.aria-label]="'Editar ' + fila.nombre"
+                >
+                  <mat-icon>edit</mat-icon>
+                  Editar
+                </button>
+                @if (fila.activo) {
+                  <button
+                    mat-stroked-button
+                    class="dc-accion dc-accion--peligro"
+                    type="button"
+                    (click)="darDeBaja(fila)"
+                    [attr.aria-label]="'Dar de baja ' + fila.nombre"
+                  >
+                    <mat-icon>do_not_disturb_on</mat-icon>
+                    Dar de baja
+                  </button>
+                }
+              </span>
             }
           </td>
         </ng-container>
@@ -103,7 +131,16 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
     </div>
 
     @if (!cargando() && filas().length === 0) {
-      <p class="vacio">No hay especialidades que mostrar.</p>
+      <p class="dc-vacio">
+        <mat-icon aria-hidden="true">search_off</mat-icon>
+        <span>
+          {{
+            filtro().trim()
+              ? 'Ninguna especialidad coincide con ese nombre. Prueba con otro o borra el filtro.'
+              : 'Aún no hay especialidades.'
+          }}
+        </span>
+      </p>
     }
 
     <mat-paginator
@@ -124,15 +161,24 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
       min-width: 34rem;
     }
     .col-acciones {
-      width: 7rem;
+      width: 15rem;
       text-align: right;
     }
-    .error {
-      color: var(--mat-sys-error, #b3261e);
+    .especialidad {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-weight: 500;
     }
-    .vacio {
-      padding: 1.5rem 0;
-      opacity: 0.7;
+    .especialidad .dc-spec-tile {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+    .dc-aviso {
+      margin: 0 0 var(--space-5);
+    }
+    .error {
+      color: var(--danger-ink);
     }
   `,
 })
@@ -144,6 +190,7 @@ export class EspecialidadList {
   private readonly router = inject(Router);
 
   protected readonly columnas = ['nombre', 'descripcion', 'activo', 'acciones'];
+  protected readonly visual = (e: Especialidad) => visualDeEspecialidad(e.nombre);
 
   protected readonly datos = signal<Especialidad[]>([]);
   protected readonly indice = signal(0);
@@ -154,18 +201,12 @@ export class EspecialidadList {
 
   protected readonly puedeEscribir = computed(() => this.auth.rol() === 'ADMINISTRADOR');
 
-  /**
-   * El filtro se aplica sobre la pagina cargada, no sobre el total: el endpoint
-   * no acepta un parametro de busqueda, y traer todas las paginas para filtrar
-   * en cliente anularia la paginacion en servidor.
-   */
   protected readonly filas = computed(() => {
     const texto = this.filtro().trim().toLowerCase();
     const filas = [...this.datos()].sort((a, b) => a.nombre.localeCompare(b.nombre));
     return texto ? filas.filter((f) => f.nombre.toLowerCase().includes(texto)) : filas;
   });
 
-  /** Corte de la pagina actual sobre el conjunto ya filtrado. */
   protected readonly pagina = computed(() => {
     const desde = this.indice() * this.tamano();
     return this.filas().slice(desde, desde + this.tamano());
@@ -197,7 +238,6 @@ export class EspecialidadList {
     this.tamano.set(evento.pageSize);
   }
 
-  /** Se pasa la fila por estado: no hay `GET /{id}` para este recurso. */
   protected editar(fila: Especialidad): void {
     void this.router.navigate(['/especialidades/editar', fila.id], { state: { fila } });
   }
@@ -205,7 +245,7 @@ export class EspecialidadList {
   protected darDeBaja(fila: Especialidad): void {
     const datos: ConfirmarDatos = {
       titulo: 'Dar de baja la especialidad',
-      mensaje: `«${fila.nombre}» dejara de estar disponible. Es una baja logica: el registro se conserva.`,
+      mensaje: `«${fila.nombre}» dejará de estar disponible. Es una baja lógica: el registro se conserva.`,
       confirmar: 'Dar de baja',
       destructivo: true,
     };
@@ -222,8 +262,6 @@ export class EspecialidadList {
             this.snackBar.open('Especialidad dada de baja.', 'Cerrar', { duration: 4000 });
             this.cargar();
           },
-          // Un 409 aqui significa que quedan tratamientos activos que la
-          // exigen (RN-08). El mensaje del backend lo explica.
           error: (err: unknown) =>
             this.snackBar.open(mensajeDeError(err), 'Cerrar', { duration: 8000 }),
         });

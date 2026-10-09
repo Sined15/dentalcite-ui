@@ -1,15 +1,7 @@
 import { PageResponse } from '../../core/http/api.types';
 import { CitaResumen } from '../../models';
 
-/**
- * Material de prueba compartido por las pantallas que leen
- * `GET /api/v1/citas/mias`: «Mis citas», «Historial» y «Tratamientos».
- *
- * Las tres parten del mismo cuerpo de respuesta, así que el fixture vive una vez
- * y no tres. No es código de producción: no lo importa ningún componente.
- */
 
-/** "YYYY-MM-DD" de hoy más `dias`, en hora local y sin pasar por UTC. */
 export function fechaLocal(dias: number): string {
   const d = new Date();
   d.setDate(d.getDate() + dias);
@@ -20,7 +12,6 @@ export function fechaLocal(dias: number): string {
 
 export interface CitaDePrueba {
   id: string;
-  /** Días desde hoy: negativo para una cita pasada. */
   dias: number;
   estado?: CitaResumen['estado'];
   cancelable?: boolean;

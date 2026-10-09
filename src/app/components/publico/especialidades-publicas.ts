@@ -1,22 +1,22 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { mensajeDeError } from '../../core/http/api-error';
 import { EspecialidadPublica } from '../../models';
 import { PublicoService } from '../../services/publico.service';
+import { visualDeEspecialidad } from '../../shared/especialidad-visual';
 
-/**
- * La galeria de especialidades (HU-06, v4): **una imagen con el nombre debajo**, y
- * nada mas. Ni descripcion, ni estado, ni acciones de mantenimiento.
- *
- * Que no aparezcan no depende de esta plantilla: `/api/v1/publico/especialidades`
- * no los manda. Ocultarlos aqui habria sido confiar la regla al cliente.
- */
 @Component({
   selector: 'app-especialidades-publicas',
-  imports: [RouterLink, MatIconModule, MatProgressBarModule],
+  imports: [RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule],
   template: `
+    <nav class="migas" aria-label="Migas de pan">
+      <a routerLink="/">Inicio</a>
+      <mat-icon aria-hidden="true">chevron_right</mat-icon>
+      <span aria-current="page">Especialidades</span>
+    </nav>
     <h1>Nuestras especialidades</h1>
     <p class="entradilla">Elige una para ver sus tratamientos y los odontólogos que la ejercen.</p>
 
@@ -32,70 +32,98 @@ import { PublicoService } from '../../services/publico.service';
       <p>Todavía no hay especialidades publicadas.</p>
     }
 
-    <ul class="galeria">
+    <ul class="galeria dc-grid">
       @for (especialidad of especialidades(); track especialidad.id) {
-        <li>
-          <a [routerLink]="['/nuestras-especialidades', especialidad.id]">
-            @if (especialidad.imagenUrl) {
-              <img [src]="especialidad.imagenUrl" alt="" />
-            } @else {
-              <div class="marcador" aria-hidden="true"><mat-icon>medical_services</mat-icon></div>
-            }
-            <span class="nombre">{{ especialidad.nombre }}</span>
+        <li class="tarjeta" [attr.data-spec]="visual(especialidad).clave">
+          <div class="cabecera-tarjeta">
+            <span class="dc-spec-tile" aria-hidden="true">
+              @if (especialidad.imagenUrl) {
+                <img [src]="especialidad.imagenUrl" alt="" />
+              } @else {
+                <mat-icon>{{ visual(especialidad).icono }}</mat-icon>
+              }
+            </span>
+            <h2 class="nombre">{{ especialidad.nombre }}</h2>
+          </div>
+          <a mat-stroked-button [routerLink]="['/nuestras-especialidades', especialidad.id]">
+            Ver especialidad
+            <mat-icon iconPositionEnd aria-hidden="true">chevron_right</mat-icon>
           </a>
         </li>
       }
     </ul>
   `,
   styles: `
+    .migas {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .migas a {
+      color: var(--brand-ink);
+    }
+    .migas mat-icon {
+      width: 1rem;
+      height: 1rem;
+      font-size: 1rem;
+      color: var(--ink-faint);
+    }
     h1 {
-      font-size: 1.75rem;
-      margin: 0.5rem 0 0.5rem;
+      margin: var(--space-4) 0 0;
+      font: var(--text-display-md);
+      font-size: clamp(1.75rem, 3.4vw, 2.125rem);
+      letter-spacing: -0.015em;
     }
     .entradilla {
-      margin: 0 0 1.5rem;
-      opacity: 0.8;
+      margin: var(--space-2) 0 var(--space-8);
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
     }
     .galeria {
       list-style: none;
       margin: 0;
       padding: 0;
-      display: grid;
-      gap: 1.25rem;
-      grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
     }
-    .galeria a {
-      display: block;
-      text-decoration: none;
-      color: inherit;
-      border-radius: 0.75rem;
+    .tarjeta {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+    .tarjeta:hover {
+      box-shadow: var(--shadow-sm);
+      border-color: var(--border-strong);
+    }
+    .cabecera-tarjeta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .dc-spec-tile {
       overflow: hidden;
-      border: 1px solid var(--mat-sys-outline-variant, #d9d9d9);
     }
-    .galeria a:hover,
-    .galeria a:focus-visible {
-      outline: 2px solid var(--mat-sys-primary, #1f6f8b);
-      outline-offset: 2px;
-    }
-    img,
-    .marcador {
+    .dc-spec-tile img {
       width: 100%;
-      aspect-ratio: 3 / 2;
+      height: 100%;
       object-fit: cover;
       display: block;
     }
-    .marcador {
-      display: grid;
-      place-items: center;
-      background: var(--mat-sys-surface-variant, #eceff1);
-    }
     .nombre {
-      display: block;
-      padding: 0.75rem 0.9rem;
-      font-weight: 600;
+      margin: 0;
+      font: var(--text-title-sm);
+      min-width: 0;
+    }
+    .tarjeta a[mat-stroked-button] {
+      margin-top: auto;
+      align-self: flex-start;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
   `,
 })
@@ -105,6 +133,10 @@ export class EspecialidadesPublicas implements OnInit {
   protected readonly especialidades = signal<EspecialidadPublica[]>([]);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  protected visual(especialidad: EspecialidadPublica) {
+    return visualDeEspecialidad(especialidad.nombre);
+  }
 
   ngOnInit(): void {
     this.cargando.set(true);

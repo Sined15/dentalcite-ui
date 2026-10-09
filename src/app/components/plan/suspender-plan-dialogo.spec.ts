@@ -67,8 +67,6 @@ describe('SuspenderPlanDialogo', () => {
   });
 
   it('sin motivo no envia nada', () => {
-    // El criterio dice «lo suspenda indicando motivo»: el 400 del servidor es la
-    // red, no el camino normal.
     montar();
 
     componente.suspender();
@@ -114,17 +112,15 @@ describe('SuspenderPlanDialogo', () => {
 
     componente.suspender();
     httpMock.expectOne(API).flush(
-      { message: 'Este plan lo creó otro odontólogo (RNF-04).' },
+      { message: 'No puede modificar este plan de tratamiento.' },
       { status: 403, statusText: 'Forbidden' },
     );
 
     expect(cerrar).not.toHaveBeenCalled();
-    expect(componente.error()).toContain('otro odontólogo');
+    expect(componente.error()).toContain('No puede modificar este plan');
   });
 
   it('dice que el tratamiento volvera a poder planificarse', () => {
-    // Es el efecto que el odontologo busca al replantear un plan, y no verlo
-    // escrito obliga a deducirlo.
     montar();
 
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';

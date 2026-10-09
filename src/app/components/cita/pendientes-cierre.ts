@@ -12,17 +12,6 @@ import { Cita, CitaResumen } from '../../models';
 import { CitaService } from '../../services/cita.service';
 import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
 
-/**
- * Las citas pendientes de cierre (HU-16 · RF-22).
- *
- * <p>Es una cola de trabajo, no una consulta: no lleva filtros porque no hay
- * nada que buscar —todo lo que aparece hay que cerrarlo— y llega ordenada de la
- * más antigua a la más reciente, que es el orden en que conviene despacharla.
- *
- * <p>Quién ve qué lo decide el servidor por el rol: el odontólogo solo las
- * suyas, recepción y administración las de toda la clínica. Aquí no hay ningún
- * parámetro que lo controle, a propósito.
- */
 @Component({
   selector: 'app-pendientes-cierre',
   imports: [
@@ -50,11 +39,16 @@ import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './res
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de citas pendientes de cierre">
+    <div
+      class="tabla-scroll tabla-apilable"
+      tabindex="0"
+      role="region"
+      aria-label="Tabla de citas pendientes de cierre"
+    >
       <table mat-table [dataSource]="citas()">
         <ng-container matColumnDef="cuando">
           <th mat-header-cell *matHeaderCellDef>Cuándo</th>
-          <td mat-cell *matCellDef="let fila">
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Cuándo">
             {{ fila.fecha | date: 'd MMM y' }}
             <span class="dia">{{ fila.hora.slice(0, 5) }} · {{ fila.duracionMinutos }} min</span>
           </td>
@@ -62,7 +56,7 @@ import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './res
 
         <ng-container matColumnDef="paciente">
           <th mat-header-cell *matHeaderCellDef>Paciente</th>
-          <td mat-cell *matCellDef="let fila">
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Paciente">
             {{ fila.paciente.nombre }}
             <span class="dia">{{ fila.paciente.numeroHistoria }}</span>
           </td>
@@ -70,12 +64,12 @@ import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './res
 
         <ng-container matColumnDef="odontologo">
           <th mat-header-cell *matHeaderCellDef>Odontólogo</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.odontologo.nombre }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Odontólogo">{{ fila.odontologo.nombre }}</td>
         </ng-container>
 
         <ng-container matColumnDef="tratamiento">
           <th mat-header-cell *matHeaderCellDef>Tratamiento</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.tratamiento.nombre }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Tratamiento">{{ fila.tratamiento.nombre }}</td>
         </ng-container>
 
         <ng-container matColumnDef="acciones">
@@ -112,15 +106,14 @@ import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './res
     />
   `,
   styles: `
-    /* Color propio en vez de opacidad: al 70 % el contraste caia por debajo del
-       4.5:1 que exige RNF-08. */
     .ayuda,
     .dia,
     .vacio {
-      color: var(--mat-sys-on-surface-variant, #45464f);
+      color: var(--ink-muted);
     }
     .ayuda {
       margin: 0.25rem 0 0;
+      max-width: var(--layout-prose);
     }
     table {
       width: 100%;
@@ -135,7 +128,7 @@ import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './res
       text-align: right;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
     .vacio {
       padding: 1.5rem 0;
@@ -195,7 +188,6 @@ export class PendientesCierre {
           return;
         }
         this.snackBar.open(avisoDeResultado(cerrada), 'Cerrar', { duration: 6000 });
-        // La cita sale de la cola: la lista que hay delante ya no vale.
         this.cargar();
       });
   }

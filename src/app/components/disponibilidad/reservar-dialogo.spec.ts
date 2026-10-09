@@ -15,7 +15,6 @@ const API = `${environment.apiUrl}/api/v1/citas`;
 
 registerLocaleData(localeEsPe);
 
-/** Un bloque de 30 min con dos odontólogos y horas exactas distintas. */
 const BLOQUE: BloqueAgrupado = {
   inicio: '09:00',
   inicios: ['09:00', '09:15'],
@@ -71,9 +70,6 @@ describe('ReservarDialogo', () => {
         provideHttpClientTesting(),
         { provide: LOCALE_ID, useValue: 'es-PE' },
         { provide: MAT_DIALOG_DATA, useValue: datos },
-        // No hay precedente de test con MatDialog en el repo: se prueba el
-        // componente directo con un doble de su referencia, que es mas simple y
-        // no depende del overlay.
         { provide: MatDialogRef, useValue: { close: cerrar } },
       ],
     });
@@ -96,7 +92,6 @@ describe('ReservarDialogo', () => {
   });
 
   it('ofrece las horas exactas del odontologo elegido, no las del bloque', () => {
-    // Ana solo tiene las 09:15 dentro de este bloque de 30 minutos.
     montar();
     componente.odontologoElegido = 'odo-2';
     componente.cambiarOdontologo();
@@ -115,8 +110,6 @@ describe('ReservarDialogo', () => {
   });
 
   it('reservando el propio paciente, envia fecha y hora y no envia paciente', async () => {
-    // HU-09: la ficha sale del token. Si el cuerpo la llevara, el servidor
-    // respondería 403 aunque fuese la suya, así que la clave no viaja siquiera.
     montar();
     componente.confirmar();
 
@@ -133,7 +126,6 @@ describe('ReservarDialogo', () => {
   });
 
   it('reservando desde recepcion, envia la ficha del paciente', async () => {
-    // HU-14 · RF-17: es lo único que cambia en el cuerpo respecto de HU-09.
     montar(BLOQUE, { id: 'ficha-9', nombre: 'Ramos, Julio', numeroHistoria: 'HC-00042' });
     componente.confirmar();
 
@@ -149,8 +141,6 @@ describe('ReservarDialogo', () => {
   });
 
   it('reservando desde recepcion, muestra de quien es la cita', () => {
-    // Quien confirma no es quien va a venir: recepción encadena reservas de
-    // personas distintas y el nombre tiene que estar delante al pulsar.
     montar(BLOQUE, { id: 'ficha-9', nombre: 'Ramos, Julio', numeroHistoria: 'HC-00042' });
 
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
@@ -167,7 +157,6 @@ describe('ReservarDialogo', () => {
   });
 
   it('muestra dentro del dialogo el 422 de la ventana de reserva', async () => {
-    // RN-05. El dialogo no se cierra: cerrarlo obligaria a rehacer la eleccion.
     montar();
     componente.confirmar();
 
@@ -184,8 +173,6 @@ describe('ReservarDialogo', () => {
   });
 
   it('HU-10: el 409 cierra el dialogo pidiendo recalcular la disponibilidad', async () => {
-    // RF-16: la franja se ocupo entre la consulta y la confirmacion. Seguir
-    // mirando la lista vieja es peor que refrescarla.
     montar();
     componente.confirmar();
 

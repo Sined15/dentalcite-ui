@@ -1,9 +1,5 @@
 import { MatPaginatorIntl } from '@angular/material/paginator';
 
-/**
- * `MatPaginatorIntl` viene en inglés por defecto ("Items per page", "1 - 8 of
- * 8"), lo que rompe la coherencia de una interfaz en español.
- */
 export function paginadorEnEspanol(): MatPaginatorIntl {
   const intl = new MatPaginatorIntl();
   intl.itemsPerPageLabel = 'Elementos por página:';

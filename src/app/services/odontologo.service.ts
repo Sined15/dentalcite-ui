@@ -23,7 +23,6 @@ export class OdontologoService {
     return this.http.put<Odontologo>(`${this.url}/${id}`, body);
   }
 
-  /** Baja logica. 409 si el odontologo tiene citas activas (RN-12). */
   darDeBaja(id: string): Observable<void> {
     return this.http.patch<void>(`${this.url}/${id}`, null);
   }

@@ -12,29 +12,21 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { mensajeDeError } from '../../../core/http/api-error';
-import { CitaResumen, PacienteDetalle, Plan } from '../../../models';
+import { CitaResumen, EstadoCita, PacienteDetalle, Plan } from '../../../models';
 import { OdontologoService } from '../../../services/odontologo.service';
 import { PacienteService } from '../../../services/paciente.service';
 import { PlanService } from '../../../services/plan.service';
 import { UsuarioService } from '../../../services/usuario.service';
+import {
+  etiquetaDeEstadoCita,
+  iconoDeEstadoCita,
+  tonoDeEstadoCita,
+} from '../../../shared/estado-cita';
 import { miOdontologo } from '../../../shared/mi-odontologo';
 import { CerrarSesionDatos, CerrarSesionDialogo } from '../../plan/cerrar-sesion-dialogo';
 import { PlanEdit, PlanEditDatos } from '../../plan/plan-edit';
 import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-plan-dialogo';
 
-/**
- * HU-13 · RF-08: «la ficha con datos, alergias y citas pasadas y futuras, y
- * editar los datos de contacto».
- *
- * Desde HU-17 muestra además los planes de tratamiento del paciente (RF-23), que
- * es donde el odontólogo decide planificar: aquí ya tiene delante sus alergias y
- * su historial de citas.
- *
- * El formulario de edición solo se pinta para RECEPCIONISTA y ADMINISTRADOR,
- * que son quienes RF-08 autoriza. Ocultarlo no es la defensa —esa es el 403 del
- * servidor, que se comprueba en su prueba de integración— sino no ofrecer al
- * odontólogo un botón que va a fallar.
- */
 @Component({
   selector: 'app-paciente-ficha',
   imports: [
@@ -58,26 +50,30 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
     }
 
     @if (ficha(); as p) {
-      <h1>{{ p.apellidos }}, {{ p.nombres }}</h1>
-      <p class="ayuda">
-        Historia clínica {{ p.numeroHistoria }} · {{ p.tipoDocumento }} {{ p.documento }}
-      </p>
-
-      <!--
-        HU-14 · RF-17: es el camino natural para atender a quien llama o se
-        acerca al mostrador —se le busca, se abre su ficha y se reserva—, y lleva
-        al paciente ya elegido. Solo para quien puede ejercerlo: al odontologo y
-        al propio paciente el servidor les devolveria 403.
-      -->
-      @if (puedeReservar()) {
-        <p class="acciones-ficha">
-          <a mat-flat-button color="primary" [routerLink]="['/disponibilidad']"
+      <header class="cabecera-ficha">
+        <span class="iniciales" aria-hidden="true">{{ iniciales(p) }}</span>
+        <div class="titulo">
+          <h1>{{ p.apellidos }}, {{ p.nombres }}</h1>
+          <p class="ayuda">
+            <span>Historia clínica {{ p.numeroHistoria }}</span>
+            <span>{{ p.tipoDocumento }} {{ p.documento }}</span>
+            <span
+              class="dc-estado cuenta"
+              [class.dc-estado--ok]="p.tieneCuenta"
+            >
+              <mat-icon aria-hidden="true">{{ p.tieneCuenta ? 'check_circle' : 'person_off' }}</mat-icon>
+              {{ p.tieneCuenta ? 'Con cuenta' : 'Sin cuenta' }}
+            </span>
+          </p>
+        </div>
+        @if (puedeReservar()) {
+          <a mat-flat-button [routerLink]="['/disponibilidad']"
              [queryParams]="{ pacienteId: p.id }">
             <mat-icon>event_available</mat-icon>
             Reservar cita
           </a>
-        </p>
-      }
+        }
+      </header>
 
       <div class="columnas">
         <mat-card class="tarjeta">
@@ -115,7 +111,6 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                 <div class="acciones">
                   <button
                     mat-flat-button
-                    color="primary"
                     type="submit"
                     [disabled]="formulario.invalid || guardando()"
                   >
@@ -128,7 +123,19 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                 <dt>Teléfono</dt>
                 <dd>{{ p.telefono || '—' }}</dd>
                 <dt>Alergias</dt>
-                <dd>{{ p.alergias || 'Sin alergias registradas' }}</dd>
+                <dd>
+                  @if (alergiasDe(p).length === 0) {
+                    Sin alergias registradas
+                  } @else {
+                    <span class="alergias">
+                      @for (alergia of alergiasDe(p); track alergia) {
+                        <span class="alergia">
+                          <mat-icon aria-hidden="true">warning</mat-icon>{{ alergia }}
+                        </span>
+                      }
+                    </span>
+                  }
+                </dd>
               </dl>
             }
           </mat-card-content>
@@ -146,7 +153,16 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                   <li>
                     <strong>{{ cita.fecha | date: 'd MMM y' }} · {{ cita.hora.slice(0, 5) }}</strong>
                     <span>{{ cita.tratamiento.nombre }} — {{ cita.odontologo.nombre }}</span>
-                    <span class="estado">{{ cita.estado }}</span>
+                    <span
+                      class="dc-estado estado-cita"
+                      [class.dc-estado--info]="tono(cita.estado) === 'info'"
+                      [class.dc-estado--ok]="tono(cita.estado) === 'ok'"
+                      [class.dc-estado--aviso]="tono(cita.estado) === 'aviso'"
+                      [class.dc-estado--error]="tono(cita.estado) === 'error'"
+                    >
+                      <mat-icon aria-hidden="true">{{ icono(cita.estado) }}</mat-icon>
+                      {{ etiqueta(cita.estado) }}
+                    </span>
                   </li>
                 }
               </ul>
@@ -161,7 +177,16 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                   <li>
                     <strong>{{ cita.fecha | date: 'd MMM y' }} · {{ cita.hora.slice(0, 5) }}</strong>
                     <span>{{ cita.tratamiento.nombre }} — {{ cita.odontologo.nombre }}</span>
-                    <span class="estado">{{ cita.estado }}</span>
+                    <span
+                      class="dc-estado estado-cita"
+                      [class.dc-estado--info]="tono(cita.estado) === 'info'"
+                      [class.dc-estado--ok]="tono(cita.estado) === 'ok'"
+                      [class.dc-estado--aviso]="tono(cita.estado) === 'aviso'"
+                      [class.dc-estado--error]="tono(cita.estado) === 'error'"
+                    >
+                      <mat-icon aria-hidden="true">{{ icono(cita.estado) }}</mat-icon>
+                      {{ etiqueta(cita.estado) }}
+                    </span>
                   </li>
                 }
               </ul>
@@ -169,11 +194,6 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
           </mat-card-content>
         </mat-card>
 
-        <!--
-          HU-17 · RF-23. Solo la ven quienes pueden planificar: al paciente y a
-          recepcion el servidor les responde 403, asi que pintarles una seccion
-          vacia seria prometer algo que no pueden abrir.
-        -->
         @if (puedePlanificar()) {
           <mat-card class="tarjeta">
             <mat-card-header>
@@ -197,7 +217,14 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                           {{ plan.sesionesPrevistas === 1 ? 'sesión prevista' : 'sesiones previstas' }}
                           · {{ plan.odontologo.nombre }}
                         </span>
-                        <span class="estado">
+                        <span
+                          class="dc-estado estado-plan"
+                          [class.dc-estado--ok]="plan.activo"
+                          [class.dc-estado--aviso]="!plan.activo"
+                        >
+                          <mat-icon aria-hidden="true">{{
+                            plan.activo ? 'check_circle' : 'pause_circle'
+                          }}</mat-icon>
                           {{ plan.activo ? 'Activo' : 'Suspendido' }}
                         </span>
                         @if (plan.motivoSuspension) {
@@ -212,12 +239,28 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                             >Ver avance</a
                           >
                         </span>
+                        <span
+                          class="barra"
+                          role="progressbar"
+                          aria-valuemin="0"
+                          [attr.aria-valuemax]="plan.sesionesPrevistas"
+                          [attr.aria-valuenow]="plan.avance.completadas"
+                          [attr.aria-label]="
+                            'Sesiones completadas: ' +
+                            plan.avance.completadas +
+                            ' de ' +
+                            plan.sesionesPrevistas
+                          "
+                        >
+                          <span
+                            [style.width.%]="
+                              plan.sesionesPrevistas
+                                ? (100 * plan.avance.completadas) / plan.sesionesPrevistas
+                                : 0
+                            "
+                          ></span>
+                        </span>
 
-                        <!--
-                          El estado va escrito y no solo insinuado con estilo: quien
-                          no distingue el realce tiene que poder leer igual qué
-                          sesiones están hechas y con qué cita.
-                        -->
                         <ol
                           class="sesiones"
                           [attr.aria-label]="'Sesiones del plan de ' + plan.tratamiento.nombre"
@@ -230,11 +273,6 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
                                 <span>· {{ cita.codigo }} · {{ cita.inicio | date: 'd MMM y' }}</span>
                               }
 
-                              <!--
-                                Cerrar es del administrador y del odontologo que
-                                firmo el plan: a otro el servidor le responde 403,
-                                asi que no se le ofrece el boton.
-                              -->
                               @if (sesion.estado === 'ATENDIDA' && puedeCerrar(plan)) {
                                 <button
                                   mat-button
@@ -287,7 +325,7 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
               }
 
               <div class="acciones">
-                <button mat-flat-button color="primary" type="button" (click)="nuevoPlan(p)">
+                <button mat-flat-button type="button" (click)="nuevoPlan(p)">
                   <mat-icon>assignment_add</mat-icon>
                   Nuevo plan
                 </button>
@@ -300,29 +338,110 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
   `,
   styles: `
     h1 {
-      font-size: 1.5rem;
-      margin: 0 0 0.25rem;
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
+      margin: 0 0 var(--space-1);
     }
     h2 {
-      font-size: 1rem;
-      margin: 1rem 0 0.5rem;
+      font: var(--text-title-sm);
+      margin: var(--space-5) 0 var(--space-2);
+    }
+    h2:first-child {
+      margin-top: 0;
     }
     .ayuda {
-      margin: 0 0 0.75rem;
-      color: var(--mat-sys-on-surface-variant, #49454f);
+      margin: 0 0 var(--space-4);
+      color: var(--ink-muted);
+      font: var(--text-code);
     }
     .acciones-ficha {
-      margin: 0 0 1rem;
+      margin: 0 0 var(--space-5);
     }
     .columnas {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      align-items: flex-start;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+      gap: var(--space-5);
+      align-items: start;
     }
     .tarjeta {
-      flex: 1 1 24rem;
       min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: none;
+    }
+    .cabecera-ficha {
+      display: flex;
+      align-items: center;
+      gap: var(--space-5);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-6);
+    }
+    .titulo {
+      flex: 1 1 18rem;
+      min-width: 0;
+    }
+    .iniciales {
+      width: 4rem;
+      height: 4rem;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-pill);
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
+      font: 700 1.375rem/1 var(--font-display);
+    }
+    .ayuda {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-1) var(--space-4);
+    }
+    .cuenta {
+      font: var(--text-label);
+    }
+    .alergias {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .alergia {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      height: 2rem;
+      padding: 0 var(--space-3);
+      border: 1px solid var(--warning);
+      border-radius: var(--radius-pill);
+      color: var(--warning-ink);
+      font: var(--text-label);
+    }
+    .alergia mat-icon {
+      width: 1rem;
+      height: 1rem;
+      font-size: 1rem;
+    }
+    .estado-cita {
+      align-self: flex-start;
+      margin-top: var(--space-1);
+    }
+    .barra {
+      display: block;
+      height: 0.5rem;
+      margin-top: var(--space-2);
+      border-radius: var(--radius-pill);
+      background: var(--surface-sunken);
+      overflow: hidden;
+    }
+    .barra > span {
+      display: block;
+      height: 100%;
+      border-radius: var(--radius-pill);
+      background: var(--brand);
+    }
+    .estado-plan {
+      align-self: flex-start;
+      margin: var(--space-1) 0;
     }
     form {
       display: flex;
@@ -345,8 +464,9 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
       margin: 0;
     }
     dt {
-      font-weight: 600;
-      margin-top: 0.75rem;
+      font: var(--text-label);
+      color: var(--ink-muted);
+      margin-top: var(--space-3);
     }
     dd {
       margin: 0.25rem 0 0;
@@ -360,12 +480,15 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
       display: flex;
       flex-direction: column;
       padding: 0.5rem 0;
-      border-bottom: 1px solid var(--mat-sys-outline-variant, #cac4d0);
+      border-bottom: 1px solid var(--border);
+    }
+    .citas strong {
+      font: var(--text-time);
     }
     .estado,
     .vacio {
-      font-size: 0.8125rem;
-      color: var(--mat-sys-on-surface-variant, #49454f);
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
     .planes {
       list-style: none;
@@ -379,7 +502,7 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
       justify-content: space-between;
       flex-wrap: wrap;
       padding: 0.75rem 0;
-      border-bottom: 1px solid var(--mat-sys-outline-variant, #cac4d0);
+      border-bottom: 1px solid var(--border);
     }
     .sesiones {
       list-style: none;
@@ -389,7 +512,6 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
       flex-direction: column;
       gap: 0.125rem;
     }
-    /* Cada fragmento baja entero a la línea siguiente a 360 px, sin partirse. */
     .sesiones li {
       display: flex;
       flex-wrap: wrap;
@@ -399,8 +521,6 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
     .sesiones li.ocupada .numero {
       font-weight: 600;
     }
-    /* Lo indicado al cerrar ocupa su propia linea: son varias frases y leerlas
-       encadenadas con el resto de la sesion las vuelve ilegibles. */
     .indicado {
       flex-basis: 100%;
       margin: 0.25rem 0 0;
@@ -408,7 +528,7 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
     }
     .control {
       flex-basis: 100%;
-      color: var(--mat-sys-on-surface-variant, #49454f);
+      color: var(--ink-muted);
     }
     .cerrar {
       margin-left: auto;
@@ -425,7 +545,11 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
       text-decoration: line-through;
     }
 
-    /* RNF-09: a 360px el boton baja bajo los datos en vez de estrujarlos. */
+    @media (max-width: 30rem) {
+      .cabecera-ficha > a {
+        width: 100%;
+      }
+    }
     @media (max-width: 480px) {
       .planes > li {
         flex-direction: column;
@@ -436,7 +560,7 @@ import { SuspenderPlanDialogo, SuspenderPlanDatos } from '../../plan/suspender-p
       }
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
   `,
 })
@@ -457,11 +581,6 @@ export class PacienteFicha {
   protected readonly planes = signal<Plan[]>([]);
   protected readonly errorPlanes = signal<string | null>(null);
 
-  /**
-   * Mi registro de odontólogo, para saber qué planes firmé yo. Nulo mientras se
-   * resuelve y para quien no es odontólogo: en ese caso no se ofrece cerrar, que
-   * es lo prudente cuando aún no se sabe.
-   */
   private readonly miOdontologoId = signal<string | null>(null);
   protected readonly cargando = signal(false);
   protected readonly guardando = signal(false);
@@ -474,25 +593,42 @@ export class PacienteFicha {
     alergias: [''],
   });
 
-  /**
-   * Pasadas y futuras se separan aquí y no en el servidor: allí habría que fijar
-   * qué es «ahora» para toda la clínica, y el cliente ya tiene la fecha y la
-   * hora locales de cada cita.
-   */
   protected readonly futuras = computed(() => this.reparto().futuras);
   protected readonly pasadas = computed(() => this.reparto().pasadas);
+
+  protected iniciales(p: PacienteDetalle): string {
+    const letra = (texto: string | null) => (texto ?? '').trim().charAt(0).toUpperCase();
+    return letra(p.nombres) + letra(p.apellidos) || '?';
+  }
+
+  protected alergiasDe(p: PacienteDetalle): string[] {
+    return (p.alergias ?? '')
+      .split(/[,;\n]/)
+      .map((a) => a.trim())
+      .filter((a) => a.length > 0);
+  }
+
+  protected etiqueta(estado: EstadoCita): string {
+    return etiquetaDeEstadoCita(estado);
+  }
+
+  protected tono(estado: EstadoCita) {
+    return tonoDeEstadoCita(estado);
+  }
+
+  protected icono(estado: EstadoCita): string {
+    return iconoDeEstadoCita(estado);
+  }
 
   protected puedeEditar(): boolean {
     const rol = this.auth.rol();
     return rol === 'RECEPCIONISTA' || rol === 'ADMINISTRADOR';
   }
 
-  /** HU-14 · RF-17: reservar en nombre de otro es de recepción y administración. */
   protected puedeReservar(): boolean {
     return this.puedeEditar();
   }
 
-  /** Cómo se lee el estado de una sesión, en vez de la constante que manda el servidor. */
   protected etiquetaSesion(estado: Plan['sesiones'][number]['estado']): string {
     switch (estado) {
       case 'ATENDIDA':
@@ -504,7 +640,6 @@ export class PacienteFicha {
     }
   }
 
-  /** HU-17 · RF-23: planificar es del odontólogo y del administrador. */
   protected puedePlanificar(): boolean {
     const rol = this.auth.rol();
     return rol === 'ODONTOLOGO' || rol === 'ADMINISTRADOR';
@@ -531,11 +666,6 @@ export class PacienteFicha {
       });
   }
 
-  /**
-   * Cerrar una sesión es del administrador y del odontólogo que firmó el plan, que
-   * es la misma pregunta que decide la suspensión. Se compara contra el registro
-   * propio y no contra la cuenta, igual que hace el servidor.
-   */
   protected puedeCerrar(plan: Plan): boolean {
     const rol = this.auth.rol();
     if (rol === 'ADMINISTRADOR') {
@@ -580,12 +710,6 @@ export class PacienteFicha {
       });
   }
 
-  /**
-   * Los planes van en su propia consulta y no dentro de la ficha: la ficha es de
-   * HU-13 y la ven los cuatro roles, mientras que los planes solo los alcanzan
-   * quienes pueden planificar. Meterlos en el mismo cuerpo obligaría a vaciarlos
-   * según quién mire.
-   */
   private cargarPlanes(): void {
     if (!this.puedePlanificar()) {
       return;
@@ -604,8 +728,6 @@ export class PacienteFicha {
     this.cargar();
     this.cargarPlanes();
 
-    // Solo hace falta para decidir qué planes puede cerrar este profesional; para
-    // los demás roles sería un par de llamadas que no cambian nada de la pantalla.
     if (this.auth.rol() === 'ODONTOLOGO') {
       miOdontologo(this.usuarioService, this.odontologoService).subscribe((odontologo) =>
         this.miOdontologoId.set(odontologo?.id ?? null),
@@ -625,7 +747,6 @@ export class PacienteFicha {
       .actualizar(this.id, {
         nombres: valores.nombres,
         apellidos: valores.apellidos,
-        // Ausente, no vacio: es un PUT y el servidor borra lo que no llega.
         telefono: valores.telefono || undefined,
         alergias: valores.alergias || undefined,
       })
@@ -665,8 +786,6 @@ export class PacienteFicha {
 
   private reparto(): { futuras: CitaResumen[]; pasadas: CitaResumen[] } {
     const citas = this.ficha()?.citas ?? [];
-    // `fecha` y `hora` son cadenas en hora local de la clinica: se comparan como
-    // texto ISO, sin convertirlas a Date, que las desplazaria al huso del navegador.
     const ahora = new Date();
     const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(
       ahora.getDate(),
@@ -679,8 +798,6 @@ export class PacienteFicha {
       const esFutura = cita.fecha > hoy || (cita.fecha === hoy && cita.hora >= hora);
       (esFutura ? futuras : pasadas).push(cita);
     }
-    // El servidor las manda de la mas reciente a la mas antigua; las futuras se
-    // leen mejor al reves, empezando por la mas proxima.
     return { futuras: futuras.slice().reverse(), pasadas };
   }
 }

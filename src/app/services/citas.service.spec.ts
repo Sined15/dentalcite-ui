@@ -6,16 +6,6 @@ import { environment } from '../../environments/environment';
 import { CitaService } from './cita.service';
 import { DisponibilidadService } from './disponibilidad.service';
 
-/**
- * Fija la forma de las llamadas del Sprint 2, como `catalogo.service.spec.ts`
- * hace con las del catalogo.
- *
- * Lo que se comprueba es lo que un cambio distraido rompe sin que el compilador
- * proteste: que un filtro sin elegir viaje **ausente** y no en blanco —para el
- * servidor un parametro vacio no significa «todos»—, que la cancelacion sea un
- * `PATCH` con motivo en el cuerpo, y que la reserva no mande paciente alguno,
- * porque el servidor lo saca del token (HU-14 es la que anadira ese campo).
- */
 const API = environment.apiUrl;
 const CITAS = `${API}/api/v1/citas`;
 const DISPONIBILIDAD = `${API}/api/v1/disponibilidad`;
@@ -139,7 +129,6 @@ describe('servicios de citas y disponibilidad', () => {
     });
 
     it('no manda el orden: lo pone el servidor', () => {
-      // Duplicarlo aqui obligaria a mantener las dos copias de acuerdo.
       servicio.listar({ desde: '2026-10-12', hasta: '2026-10-12' }).subscribe();
 
       expect(httpMock.expectOne((r) => r.url === CITAS).request.params.has('sort')).toBe(false);

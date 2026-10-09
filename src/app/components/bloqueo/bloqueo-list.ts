@@ -35,8 +35,14 @@ import { miOdontologo } from '../../shared/mi-odontologo';
   ],
   template: `
     <header class="cabecera">
-      <h1>Bloqueos de agenda</h1>
-      <a mat-flat-button color="primary" routerLink="/bloqueos/nuevo">
+      <div class="dc-titular">
+        <h1>Bloqueos de agenda</h1>
+        <p class="dc-subtitulo">
+          Cierra una franja de un odontólogo o de un consultorio: vacaciones, mantenimiento, una
+          reunión. Las horas bloqueadas dejan de ofrecerse.
+        </p>
+      </div>
+      <a mat-flat-button routerLink="/bloqueos/nuevo">
         <mat-icon>add</mat-icon>
         Nuevo bloqueo
       </a>
@@ -56,17 +62,21 @@ import { miOdontologo } from '../../shared/mi-odontologo';
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de bloqueos de agenda">
+    <div class="tabla-scroll tabla-apilable" tabindex="0" role="region" aria-label="Tabla de bloqueos de agenda">
       <table mat-table [dataSource]="pagina()">
         <ng-container matColumnDef="ambito">
           <th mat-header-cell *matHeaderCellDef>Ámbito</th>
-          <td mat-cell *matCellDef="let fila">
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Ámbito">
             @if (fila.odontologo) {
-              <mat-icon class="icono" aria-hidden="true">person</mat-icon>
-              {{ fila.odontologo }}
+              <span class="ambito">
+                <mat-icon class="icono" aria-hidden="true">person</mat-icon>
+                {{ fila.odontologo }}
+              </span>
             } @else if (fila.consultorio) {
-              <mat-icon class="icono" aria-hidden="true">meeting_room</mat-icon>
-              {{ fila.consultorio }}
+              <span class="ambito">
+                <mat-icon class="icono" aria-hidden="true">meeting_room</mat-icon>
+                {{ fila.consultorio }}
+              </span>
             } @else {
               —
             }
@@ -75,45 +85,45 @@ import { miOdontologo } from '../../shared/mi-odontologo';
 
         <ng-container matColumnDef="motivo">
           <th mat-header-cell *matHeaderCellDef>Motivo</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.motivo }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Motivo">{{ fila.motivo }}</td>
         </ng-container>
 
         <ng-container matColumnDef="inicio">
           <th mat-header-cell *matHeaderCellDef>Desde</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.fechaInicio | date: 'short' }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Desde">{{ fila.fechaInicio | date: "EEEE d 'de' MMMM HH:mm" }}</td>
         </ng-container>
 
         <ng-container matColumnDef="fin">
           <th mat-header-cell *matHeaderCellDef>Hasta</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.fechaFin | date: 'short' }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Hasta">{{ fila.fechaFin | date: "EEEE d 'de' MMMM HH:mm" }}</td>
         </ng-container>
 
-        <!--
-          El bloqueo ajeno se ve pero no se toca. Que un odontologo sepa que su
-          colega esta fuera es util y el servidor se lo devuelve; editarlo o
-          borrarlo le da 403, asi que los botones solo salen sobre lo suyo.
-        -->
         <ng-container matColumnDef="acciones">
           <th mat-header-cell *matHeaderCellDef class="col-acciones">Acciones</th>
           <td mat-cell *matCellDef="let fila" class="col-acciones">
             @if (puedeGestionar(fila)) {
-              <button
-                mat-icon-button
-                type="button"
-                (click)="editar(fila)"
-                [attr.aria-label]="'Editar el bloqueo ' + fila.motivo"
-              >
-                <mat-icon>edit</mat-icon>
-              </button>
-              <button
-                mat-icon-button
-                type="button"
-                color="warn"
-                (click)="eliminar(fila)"
-                [attr.aria-label]="'Eliminar el bloqueo ' + fila.motivo"
-              >
-                <mat-icon>delete</mat-icon>
-              </button>
+              <span class="dc-acciones">
+                <button
+                  mat-stroked-button
+                  class="dc-accion"
+                  type="button"
+                  (click)="editar(fila)"
+                  [attr.aria-label]="'Editar el bloqueo ' + fila.motivo"
+                >
+                  <mat-icon>edit</mat-icon>
+                  Editar
+                </button>
+                <button
+                  mat-stroked-button
+                  class="dc-accion dc-accion--peligro"
+                  type="button"
+                  (click)="eliminar(fila)"
+                  [attr.aria-label]="'Eliminar el bloqueo ' + fila.motivo"
+                >
+                  <mat-icon>delete</mat-icon>
+                  Eliminar
+                </button>
+              </span>
             } @else {
               <span class="ajeno" aria-hidden="true">—</span>
             }
@@ -126,7 +136,16 @@ import { miOdontologo } from '../../shared/mi-odontologo';
     </div>
 
     @if (!cargando() && filas().length === 0) {
-      <p class="vacio">No hay bloqueos que mostrar.</p>
+      <p class="dc-vacio">
+        <mat-icon aria-hidden="true">event_available</mat-icon>
+        <span>
+          {{
+            filtro().trim()
+              ? 'Ningún bloqueo coincide con esa búsqueda. Prueba con otra o bórrala.'
+              : 'No hay bloqueos: toda la agenda se ofrece con normalidad.'
+          }}
+        </span>
+      </p>
     }
 
     <mat-paginator
@@ -141,29 +160,35 @@ import { miOdontologo } from '../../shared/mi-odontologo';
   styles: `
     .filtro {
       width: min(100%, 26rem);
+      margin-bottom: var(--space-2);
     }
     table {
       width: 100%;
       min-width: 46rem;
     }
+    .ambito {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      height: 1.75rem;
+      padding: 0 var(--space-3);
+      border-radius: var(--radius-pill);
+      background: var(--surface-sunken);
+      font: var(--text-label);
+    }
     .icono {
       font-size: 1rem;
       width: 1rem;
       height: 1rem;
-      vertical-align: text-bottom;
-      opacity: 0.6;
     }
     .col-acciones {
-      width: 7rem;
+      width: 15rem;
       text-align: right;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
-    .vacio {
-      padding: 1.5rem 0;
-      opacity: 0.7;
-    }
+
     .ajeno {
       opacity: 0.5;
     }
@@ -180,7 +205,6 @@ export class BloqueoList {
 
   protected readonly columnas = ['ambito', 'motivo', 'inicio', 'fin', 'acciones'];
 
-  /** Su propio registro, cuando quien mira es un odontologo. */
   private readonly miOdontologoId = signal<string | null>(null);
 
   private readonly datos = signal<Bloqueo[]>([]);
@@ -190,7 +214,6 @@ export class BloqueoList {
   protected readonly indice = signal(0);
   protected readonly tamano = signal(20);
 
-  /** Listado plano: el filtrado y la paginacion son de cliente. */
   protected readonly filas = computed(() => {
     const texto = this.filtro().trim().toLowerCase();
     const filas = [...this.datos()].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio));
@@ -218,12 +241,6 @@ export class BloqueoList {
     }
   }
 
-  /**
-   * Quien puede editar o retirar este bloqueo. Recepción y administración,
-   * cualquiera; el odontólogo, solo los de su propia agenda —nunca los de un
-   * consultorio, que tampoco puede registrar—. Mientras su registro no se ha
-   * resuelto no se ofrece ninguno: es preferible a ofrecer uno de más.
-   */
   protected puedeGestionar(fila: Bloqueo): boolean {
     if (this.auth.rol() !== 'ODONTOLOGO') {
       return true;
@@ -256,13 +273,19 @@ export class BloqueoList {
     void this.router.navigate(['/bloqueos/editar', fila.id], { state: { fila } });
   }
 
-  /** Borrado real: este recurso si expone DELETE. */
   protected eliminar(fila: Bloqueo): void {
     const datos: ConfirmarDatos = {
       titulo: 'Eliminar el bloqueo',
-      mensaje: `Se eliminara el bloqueo «${fila.motivo}». La agenda volvera a estar disponible en ese rango.`,
+      mensaje: `Se eliminará el bloqueo «${fila.motivo}». La agenda volverá a estar disponible en ese rango y los pacientes podrán reservar esas horas.`,
       confirmar: 'Eliminar',
       destructivo: true,
+      icono: 'delete',
+      resumen: {
+        nombre: fila.motivo,
+        detalle: [fila.consultorio ?? fila.odontologo, `${fila.fechaInicio} – ${fila.fechaFin}`]
+          .filter(Boolean)
+          .join(' · '),
+      },
     };
 
     this.dialogo

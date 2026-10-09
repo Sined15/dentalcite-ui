@@ -36,7 +36,6 @@ function cita(id: string): CitaResumen {
   };
 }
 
-/** Lo que devuelve el servidor al registrar el resultado de esa cita. */
 function cerrada(id: string, sesionEnlazada?: Cita['sesionEnlazada']): Cita {
   return {
     id,
@@ -79,7 +78,6 @@ describe('PendientesCierre', () => {
   const abiertos: unknown[] = [];
   const avisos = vi.fn();
 
-  /** @param cierraCon lo que devuelve el dialogo: la cita cerrada, o `false` si se cancela. */
   async function montar(citas: CitaResumen[], cierraCon: Cita | false = cerrada('c-1')): Promise<void> {
     TestBed.resetTestingModule();
     abiertos.length = 0;
@@ -114,7 +112,6 @@ describe('PendientesCierre', () => {
   beforeEach(() => TestBed.resetTestingModule());
 
   it('pide la cola sin ningun filtro: quien ve que lo decide el rol', async () => {
-    // Un parametro de odontologo aqui permitiria pedir la cola de otro.
     await montar([cita('c-1')]);
 
     expect(componente.citas().map((c) => c.id)).toEqual(['c-1']);
@@ -144,7 +141,6 @@ describe('PendientesCierre', () => {
   });
 
   it('tras registrar el resultado vuelve a pedir la cola', async () => {
-    // La cita sale de la cola al cerrarse: la lista de delante ya no vale.
     await montar([cita('c-1')]);
 
     componente.registrar(componente.citas()[0]);

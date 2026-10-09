@@ -65,8 +65,6 @@ describe('CitaReservadaDialogo', () => {
 
     expect(texto).toContain('Profilaxis dental');
     expect(texto).toContain('45 min');
-    // La hora se recorta a "HH:mm" sin pasar por Date: convertirla la desplazaria
-    // al huso del navegador.
     expect(texto).toContain('09:30');
     expect(texto).not.toContain('09:30:00');
     expect(texto).toContain('Luis Pérez');
@@ -94,8 +92,6 @@ describe('CitaReservadaDialogo', () => {
   });
 
   it('sin portapapeles disponible, el boton no rompe el dialogo', () => {
-    // Un navegador sin `navigator.clipboard` (contexto no seguro) no debe dejar
-    // al paciente sin ver su codigo, que es lo que RF-15 exige.
     vi.stubGlobal('navigator', {});
     montar();
 

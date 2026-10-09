@@ -13,27 +13,6 @@ import { CitaService } from '../../services/cita.service';
 import { CancelarDialogo, CancelarDialogoDatos } from './cancelar-dialogo';
 import { etiquetaEstado, repartirCitas } from './repartir-citas';
 
-/**
- * Las citas **próximas** del propio paciente (HU-15 · RF-18, RF-19).
- *
- * <p>No reutiliza `Agenda`: aquella es una tabla de recepción, con filtros por
- * odontólogo, columna de paciente y bitácora, y aquí nada de eso tiene sentido
- * —el paciente es uno, la bitácora es interna y el volumen es de unas pocas
- * filas—. Lo que sí se reutiliza es el diálogo de cancelación, que es donde
- * está la parte con reglas.
- *
- * <p>Las pasadas están en `HistorialCitas`, y el corte entre unas y otras lo hace
- * `repartirCitas`: el servidor devuelve ambas juntas, porque fijar ahí qué es
- * «ahora» sería fijarlo para toda la clínica, y el cliente ya tiene la fecha y la
- * hora locales de cada cita. Aquí solo quedan las próximas porque es donde vive
- * el botón de cancelar; una lista con lo de años atrás lo enterraría.
- *
- * <p><strong>El botón de cancelar lo decide el servidor</strong>, mediante
- * `cancelablePorPaciente`. La ventana de RN-06 tiene una excepción —la cita que
- * el propio paciente reservó con poca antelación— que depende de quién la creó y
- * de cuándo; rehacer esa cuenta aquí sería tener la regla en dos sitios y con
- * dos relojes.
- */
 @Component({
   selector: 'app-mis-citas',
   imports: [
@@ -47,7 +26,7 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
   template: `
     <div class="cabecera">
       <h1>Mis citas</h1>
-      <a mat-flat-button color="primary" routerLink="/disponibilidad">
+      <a mat-flat-button routerLink="/disponibilidad">
         <mat-icon>event_available</mat-icon>
         Reservar una cita
       </a>
@@ -71,12 +50,16 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
         <ul class="citas">
           @for (cita of futuras(); track cita.id) {
             <li>
-              <mat-card class="cita">
+              <mat-card class="cita" appearance="outlined">
                 <mat-card-content>
+                  <div class="fecha" aria-hidden="true">
+                    <span class="dia-num">{{ cita.fecha | date: 'd' }}</span>
+                    <span class="mes">{{ cita.fecha | date: 'MMM' }}</span>
+                  </div>
                   <div class="datos">
                     <p class="cuando">
                       {{ cita.fecha | date: "EEEE d 'de' MMMM" }} ·
-                      <strong>{{ cita.hora.slice(0, 5) }}</strong>
+                      <strong class="hora">{{ cita.hora.slice(0, 5) }}</strong>
                     </p>
                     <p class="que">
                       {{ cita.tratamiento.nombre }} · {{ cita.duracionMinutos }} min
@@ -86,7 +69,10 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
                     </p>
                     <p class="codigo">
                       {{ cita.codigo }} ·
-                      <span class="estado">{{ etiquetaEstado(cita.estado) }}</span>
+                      <span class="dc-estado dc-estado--info">
+                        <mat-icon aria-hidden="true">schedule</mat-icon>
+                        {{ etiquetaEstado(cita.estado) }}
+                      </span>
                     </p>
                   </div>
 
@@ -94,7 +80,7 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
                     @if (cita.cancelablePorPaciente) {
                       <button
                         mat-stroked-button
-                        color="warn"
+                        class="cancelar"
                         type="button"
                         (click)="cancelar(cita)"
                         [attr.aria-label]="'Cancelar la cita ' + cita.codigo"
@@ -102,12 +88,8 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
                         Cancelar
                       </button>
                     } @else if (cita.estado === 'CONFIRMADA') {
-                      <!--
-                        RN-06: pasada la ventana, la cancelacion es de recepcion.
-                        Se dice por que en vez de pintar un boton deshabilitado sin
-                        explicacion, que es lo que obliga a llamar para averiguarlo.
-                      -->
                       <p class="fuera-de-plazo">
+                        <mat-icon aria-hidden="true">warning</mat-icon>
                         Ya no puedes cancelarla por aquí. Llama a la recepción de la clínica.
                       </p>
                     }
@@ -129,8 +111,8 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
   `,
   styles: `
     h2 {
-      font-size: 1.125rem;
-      margin: 1.5rem 0 0.75rem;
+      font: var(--text-title-lg);
+      margin: var(--space-6) 0 var(--space-4);
     }
     .citas {
       list-style: none;
@@ -138,14 +120,39 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
       padding: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: var(--space-4);
     }
     .cita mat-card-content {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
+      display: grid;
+      grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+      gap: var(--space-5);
       align-items: center;
-      justify-content: space-between;
+      padding: var(--space-5);
+    }
+    .fecha {
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
+      border-radius: var(--radius-md);
+      text-align: center;
+      padding: var(--space-2) 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .dia-num {
+      font: 700 1.625rem/1 var(--font-display);
+    }
+    .mes {
+      font: var(--text-overline);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .hora {
+      font: var(--text-time);
+      font-variant-numeric: tabular-nums;
+    }
+    .cancelar {
+      --mat-button-outlined-label-text-color: var(--danger-ink);
     }
     .datos {
       min-width: 0;
@@ -153,8 +160,6 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
     .datos p {
       margin: 0 0 0.125rem;
     }
-    /* es-PE escribe el dia de la semana en minuscula; capitalizar la frase
-       entera daria «Lunes 14 De Septiembre». */
     .cuando::first-letter {
       text-transform: uppercase;
     }
@@ -162,46 +167,53 @@ import { etiquetaEstado, repartirCitas } from './repartir-citas';
     .quien {
       font-size: 0.9375rem;
     }
-    /* Color propio en vez de opacidad: al 70 % el contraste caia por debajo del
-       4.5:1 que exige RNF-08. */
     .codigo,
     .fuera-de-plazo {
       font-size: 0.8125rem;
-      color: var(--mat-sys-on-surface-variant, #45464f);
-    }
-    .estado {
-      font-weight: 600;
+      color: var(--ink-muted);
     }
     .acciones {
       display: flex;
       align-items: center;
     }
     .fuera-de-plazo {
+      display: flex;
+      gap: var(--space-2);
+      align-items: flex-start;
       margin: 0;
       max-width: 16rem;
-      text-align: right;
+      color: var(--warning-ink);
+    }
+    .fuera-de-plazo mat-icon {
+      flex: none;
+      width: 1.125rem;
+      height: 1.125rem;
+      font-size: 1.125rem;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
     .vacio {
       padding: 1.5rem 0;
-      color: var(--mat-sys-on-surface-variant, #45464f);
+      color: var(--ink-muted);
     }
 
-    /* RNF-09: a 360px la tarjeta pasa a una columna y el aviso deja de ir
-       alineado a la derecha, donde quedaria en un hilo de dos palabras. */
-    @media (max-width: 480px) {
+    @media (max-width: 45rem) {
       .cita mat-card-content {
-        flex-direction: column;
+        grid-template-columns: 3.5rem minmax(0, 1fr);
+        padding: var(--space-4);
+      }
+      .acciones {
+        grid-column: 1 / -1;
         align-items: stretch;
+        flex-direction: column;
       }
       .acciones button {
         width: 100%;
+        min-height: 2.75rem;
       }
       .fuera-de-plazo {
         max-width: none;
-        text-align: left;
       }
     }
   `,
@@ -225,11 +237,6 @@ export class MisCitas {
     this.cargando.set(true);
     this.error.set(null);
 
-    // Sin rango de fechas, aunque aquí solo se pinten las próximas: `desde` es
-    // por día, así que una cita de esta misma mañana llegaría igual y habría que
-    // descartarla por hora. El corte lo hace `repartirCitas` y este filtro solo
-    // añadiría una forma más de equivocarse. El tamaño es holgado porque las
-    // citas activas de un paciente las acota RN-07.
     this.servicio.mias({}, { size: 100 }).subscribe({
       next: (pagina) => {
         this.citas.set(pagina.content);
@@ -244,7 +251,6 @@ export class MisCitas {
   }
 
   protected cancelar(cita: CitaResumen): void {
-    // Sin nombrar al paciente: es quien está mirando.
     const datos: CancelarDialogoDatos = { cita, mostrarPaciente: false };
     this.dialogo
       .open(CancelarDialogo, { data: datos })
@@ -254,7 +260,6 @@ export class MisCitas {
           return;
         }
         this.snackBar.open(`Cita ${cita.codigo} cancelada.`, 'Cerrar', { duration: 6000 });
-        // La fila cambió de estado y, con ella, si las demás se pueden cancelar.
         this.cargar();
       });
   }

@@ -26,7 +26,6 @@ function sesion(numero: number, cambios: Partial<PlanSesion> = {}): PlanSesion {
   };
 }
 
-/** Seis sesiones, dos atendidas: la primera ya cerrada y la segunda pendiente de cierre. */
 const PLAN: Plan = {
   id: PLAN_ID,
   paciente: { id: 'fic-1', nombre: 'Julio Ramos' },
@@ -69,7 +68,6 @@ describe('PlanAvance', () => {
   let httpMock: HttpTestingController;
 
   function levantar(rol: string): void {
-    // AuthService lee el token al construirse: hay que dejarlo antes del TestBed.
     localStorage.setItem(
       'dentalcite.token',
       tokenCon({

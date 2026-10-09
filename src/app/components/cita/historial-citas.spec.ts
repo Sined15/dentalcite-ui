@@ -60,8 +60,6 @@ describe('HistorialCitas', () => {
   });
 
   it('pide todas las paginas, no solo la primera', async () => {
-    // Un historial que se corta en la pagina uno sin decirlo miente sobre lo que
-    // le hicieron al paciente.
     levantar();
     httpMock
       .expectOne((r) => r.url === API)
@@ -87,8 +85,6 @@ describe('HistorialCitas', () => {
   });
 
   it('no ofrece cancelar ninguna cita', async () => {
-    // Sobre lo que ya ocurrio no se puede hacer nada, y la cancelacion vive en
-    // «Mis citas» con la ventana de RN-06.
     await montar([cita('c-1', -1, 'ATENDIDA', true)]);
 
     const raiz = fixture.nativeElement as HTMLElement;

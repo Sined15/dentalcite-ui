@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../../core/auth/auth.service';
@@ -14,23 +15,10 @@ import { TratamientoService } from '../../services/tratamiento.service';
 import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
 
 export interface PlanEditDatos {
-  /** Ficha del paciente al que se le planifica. */
   pacienteId: string;
   pacienteNombre: string;
 }
 
-/**
- * Alta de un plan de tratamiento (HU-17 · RF-23).
- *
- * <p>Es un diálogo y no una pantalla porque se decide desde la ficha del
- * paciente, que es donde el odontólogo ya está mirando cuando planifica: sacarlo
- * a una ruta propia obligaría a volver a elegir al paciente que ya tenía
- * delante.
- *
- * <p>El selector de odontólogo solo se pinta para el ADMINISTRADOR. El
- * ODONTOLOGO planifica en su propio nombre, y el servidor le responde 403 si
- * manda el campo aunque sea el suyo.
- */
 @Component({
   selector: 'app-plan-edit',
   imports: [
@@ -38,14 +26,18 @@ export interface PlanEditDatos {
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatSelectModule,
   ],
   template: `
     <h2 mat-dialog-title>Nuevo plan de tratamiento</h2>
     <mat-dialog-content>
-      <p class="resumen">
-        Para <strong>{{ datos.pacienteNombre }}</strong>
+      <p class="dc-resumen">
+        <mat-icon aria-hidden="true">person</mat-icon>
+        <span>
+          Para <strong>{{ datos.pacienteNombre }}</strong>
+        </span>
       </p>
 
       <form [formGroup]="formulario">
@@ -91,6 +83,11 @@ export interface PlanEditDatos {
         </mat-form-field>
       </form>
 
+      <p class="dc-aviso">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <span>El paciente verá el avance del plan en «Mis tratamientos» desde que lo crees.</span>
+      </p>
+
       @if (error(); as mensaje) {
         <p class="error" role="alert">{{ mensaje }}</p>
       }
@@ -100,7 +97,6 @@ export interface PlanEditDatos {
       <button mat-button type="button" [disabled]="enviando()" (click)="cerrar()">Cancelar</button>
       <button
         mat-flat-button
-        color="primary"
         type="button"
         [disabled]="formulario.invalid || enviando()"
         (click)="guardar()"
@@ -110,17 +106,14 @@ export interface PlanEditDatos {
     </mat-dialog-actions>
   `,
   styles: `
-    .resumen {
-      margin: 0 0 1rem;
-    }
     form {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: var(--space-1);
       min-width: min(22rem, 70vw);
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
       font-size: 0.875rem;
       margin: 0.75rem 0 0;
     }
@@ -136,7 +129,6 @@ export class PlanEdit {
   protected readonly dialogRef = inject<MatDialogRef<PlanEdit, Plan | null>>(MatDialogRef);
   protected readonly datos = inject<PlanEditDatos>(MAT_DIALOG_DATA);
 
-  /** Solo el administrador planifica a nombre de otro profesional. */
   protected readonly planificaParaOtro = computed(() => this.auth.rol() === 'ADMINISTRADOR');
 
   protected readonly tratamientos = signal<Tratamiento[]>([]);
@@ -159,7 +151,6 @@ export class PlanEdit {
     });
 
     if (this.planificaParaOtro()) {
-      // El campo solo es obligatorio para quien lo ve: el odontólogo no lo manda.
       this.formulario.controls.odontologoId.addValidators(Validators.required);
       cargarTodasLasPaginas((pagina) =>
         this.odontologoService.listar({ page: pagina, size: 100 }),
@@ -187,8 +178,6 @@ export class PlanEdit {
         pacienteId: this.datos.pacienteId,
         tratamientoId: valores.tratamientoId,
         sesionesPrevistas: valores.sesionesPrevistas,
-        // Ausente, no vacío: el servidor responde 403 a un ODONTOLOGO que lo
-        // mande, aunque sea su propio registro.
         ...(this.planificaParaOtro() ? { odontologoId: valores.odontologoId } : {}),
       })
       .subscribe({
@@ -197,8 +186,6 @@ export class PlanEdit {
           this.dialogRef.close(plan);
         },
         error: (err: unknown) => {
-          // El 409 de RN-13 se muestra aquí y no cierra el diálogo: dice que hay
-          // que suspender el plan en curso, y quien planifica necesita leerlo.
           this.enviando.set(false);
           this.error.set(mensajeDeError(err));
         },

@@ -4,11 +4,6 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Horario, HorarioRequest } from '../models';
 
-/**
- * Los horarios cuelgan de su odontologo:
- * `/api/v1/odontologos/{odontologoId}/horarios`. Devuelven array plano, sin
- * paginar, y es uno de los dos unicos recursos con DELETE real.
- */
 @Injectable({ providedIn: 'root' })
 export class HorarioService {
   private readonly http = inject(HttpClient);
@@ -29,7 +24,6 @@ export class HorarioService {
     return this.http.put<Horario>(`${this.base(odontologoId)}/${horarioId}`, body);
   }
 
-  /** DELETE real: el tramo se elimina, no se da de baja. */
   eliminar(odontologoId: string, horarioId: string): Observable<void> {
     return this.http.delete<void>(`${this.base(odontologoId)}/${horarioId}`);
   }

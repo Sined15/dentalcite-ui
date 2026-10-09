@@ -50,7 +50,6 @@ const ODONTOLOGOS: Odontologo[] = [
   },
 ];
 
-/** "YYYY-MM-DD" de hoy mas `dias`, en hora local y sin pasar por UTC. */
 function fechaLocal(dias: number): string {
   const d = new Date();
   d.setDate(d.getDate() + dias);
@@ -91,7 +90,6 @@ function pagina<T>(content: T[], totalElements = content.length): PageResponse<T
   };
 }
 
-/** JWT sin firmar: solo se decodifica el payload, como en auth.guards.spec.ts. */
 function sesionCon(rol: string): string {
   const b64 = (o: unknown) =>
     btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -104,17 +102,11 @@ function sesionCon(rol: string): string {
   })}.firma`;
 }
 
-/** El calendario trabaja con fechas, no con cadenas: "2026-10-12" a medianoche local. */
 function dia(iso: string): Date {
   const [anio, mes, numero] = iso.split('-').map(Number);
   return new Date(anio, mes - 1, numero);
 }
 
-/**
- * Lo que responde el calendario publico: la clinica abre de lunes a sabado y
- * cierra el domingo. Aqui solo hace falta que llegue: que el domingo salga
- * atenuado se prueba en `dias-de-atencion.spec.ts`, sobre el predicado.
- */
 const CALENDARIO: CalendarioPublico = {
   diasDeAtencion: [1, 2, 3, 4, 5, 6],
   feriados: ['2026-07-28'],
@@ -150,7 +142,6 @@ describe('Agenda', () => {
 
   afterEach(() => localStorage.clear());
 
-  /** @param cierraCon lo que devuelve el dialogo de cancelacion al cerrarse. */
   function montar(cierraCon = true): void {
     TestBed.resetTestingModule();
     abiertos.length = 0;
@@ -176,16 +167,10 @@ describe('Agenda', () => {
     fixture = TestBed.createComponent(Agenda);
     componente = fixture.componentInstance as unknown as Interno;
 
-    // El constructor carga el catalogo de odontologos, pregunta que dias abre la
-    // clinica y consulta la agenda de hoy.
     httpMock.expectOne((r) => r.url === API_ODONTOLOGOS).flush(pagina(ODONTOLOGOS));
     httpMock.expectOne(API_CALENDARIO).flush(CALENDARIO);
   }
 
-  /**
-   * La sesion se deja puesta **antes** de crear el componente: el ambito se
-   * decide en su construccion, no al consultar.
-   */
   function montarComoOdontologo(): void {
     localStorage.setItem('dentalcite.token', sesionCon('ODONTOLOGO'));
     TestBed.resetTestingModule();
@@ -204,7 +189,6 @@ describe('Agenda', () => {
     fixture = TestBed.createComponent(Agenda);
     componente = fixture.componentInstance as unknown as Interno;
 
-    // El calendario se pide igual: los dias cerrados se atenuan para todos.
     httpMock.expectOne(API_CALENDARIO).flush(CALENDARIO);
   }
 
@@ -240,7 +224,6 @@ describe('Agenda', () => {
     componente.consultar();
 
     const req = httpMock.expectOne((r) => r.url === API);
-    // Vacio no significa «todos» para el servidor: el parametro no viaja.
     expect(req.request.params.has('odontologoId')).toBe(false);
     expect(req.request.params.has('estado')).toBe(false);
     req.flush(pagina([]));
@@ -274,7 +257,6 @@ describe('Agenda', () => {
     expect(componente.formulario.hasError('rangoInvertido')).toBe(true);
 
     componente.consultar();
-    // El servidor tambien lo rechaza, pero el viaje se ahorra.
     httpMock.verify();
   });
 
@@ -283,7 +265,6 @@ describe('Agenda', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // RF-18 nombra exactamente estos tres datos.
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(texto).toContain('09:30');
     expect(texto).toContain('Ana Torres');
@@ -301,8 +282,6 @@ describe('Agenda', () => {
   });
 
   it('la pagina se pide al servidor, no se corta en el navegador', async () => {
-    // Una agenda crece sin techo: traerla entera dejaria de funcionar justo
-    // cuando la clinica llevara tiempo operando.
     httpMock.expectOne((r) => r.url === API).flush(pagina([cita('cita-1', '09:00:00')], 120));
     await fixture.whenStable();
     expect(componente.total()).toBe(120);
@@ -325,7 +304,6 @@ describe('Agenda', () => {
     expect(componente.indice()).toBe(3);
 
     componente.consultar();
-    // La pagina 3 de otra busqueda no significa nada.
     expect(httpMock.expectOne((r) => r.url === API).request.params.get('page')).toBe('0');
     expect(componente.indice()).toBe(0);
   });
@@ -347,7 +325,6 @@ describe('Agenda', () => {
     componente.cancelar(cita('cita-1', '09:00:00'));
     await fixture.whenStable();
 
-    // La fila cambio de estado: la lista que hay delante ya no vale.
     httpMock
       .expectOne((r) => r.url === API)
       .flush(pagina([cita('cita-1', '09:00:00', 'CANCELADA')]));
@@ -369,7 +346,6 @@ describe('Agenda', () => {
   });
 
   it('solo se puede cancelar lo que sigue CONFIRMADO', async () => {
-    // RN-09 no admite retornos: el boton de una cancelada esta deshabilitado.
     httpMock
       .expectOne((r) => r.url === API)
       .flush(pagina([cita('cita-1', '09:00:00', 'CANCELADA')]));
@@ -389,9 +365,6 @@ describe('Agenda', () => {
     expect(componente.etiquetaEstado('CONFIRMADA')).toBe('Confirmada');
   });
 
-  // ------------------------------------------------------------------
-  // HU-16 · registrar el resultado desde la agenda
-  // ------------------------------------------------------------------
 
   it('HU-16: una cita confirmada que ya termino esta pendiente de cierre', async () => {
     httpMock.expectOne((r) => r.url === API).flush(pagina([]));
@@ -402,8 +375,6 @@ describe('Agenda', () => {
   });
 
   it('HU-16: una cita confirmada que aun no ha llegado, no', async () => {
-    // El servidor responde 409 a esa: ofrecer el boton seria mandar a pulsar
-    // algo que no puede funcionar.
     httpMock.expectOne((r) => r.url === API).flush(pagina([]));
     await fixture.whenStable();
 
@@ -434,15 +405,10 @@ describe('Agenda', () => {
     expect(botones[0].getAttribute('aria-label')).toContain('CIT-000001');
   });
 
-  // ------------------------------------------------------------------
-  // El odontologo y las suyas
-  // ------------------------------------------------------------------
 
   it('como odontologo no pide el catalogo de odontologos', async () => {
     montarComoOdontologo();
 
-    // Sin desplegable que llenar, esa consulta seria trabajo tirado. Si se
-    // pidiera, el expectOne de la agenda fallaria por la peticion sobrante.
     httpMock.expectOne((r) => r.url === API).flush(pagina([]));
     await fixture.whenStable();
 
@@ -456,8 +422,6 @@ describe('Agenda', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // El servidor le devuelve las suyas y descarta el filtro: ofrecerlo
-    // prometeria algo que no puede cumplir.
     const raiz = fixture.nativeElement as HTMLElement;
     const etiquetas = [...raiz.querySelectorAll('mat-label')].map((e) => e.textContent?.trim());
     expect(etiquetas).not.toContain('Odontólogo');
@@ -470,8 +434,6 @@ describe('Agenda', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // Las dos son de recepcion y el servidor le responde 403: un boton que
-    // solo puede fallar no se pinta.
     const raiz = fixture.nativeElement as HTMLElement;
     expect(raiz.querySelector('button[aria-label^="Cancelar la cita"]')).toBeNull();
     expect(raiz.querySelector('button[aria-label^="Ver el historial"]')).toBeNull();

@@ -1,23 +1,22 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { RouterLink } from '@angular/router';
 import { mensajeDeError } from '../../core/http/api-error';
 import { OdontologoPublico } from '../../models';
 import { PublicoService } from '../../services/publico.service';
+import { visualDeEspecialidad } from '../../shared/especialidad-visual';
 
-/**
- * El equipo (HU-06, v4). RF-10 pide **ficha, no tabla**: imagen, nombre,
- * especialidad y COP. Una rejilla de fichas es lo que el criterio enumera, y la
- * tabla con columnas de estado y acciones se queda en la consola de
- * administracion.
- *
- * `/api/v1/publico/odontologos` no devuelve `fichaId`, asi que aqui no hay nada
- * que ocultar: el dato no llega.
- */
 @Component({
   selector: 'app-odontologos-publicos',
-  imports: [MatIconModule, MatProgressBarModule],
+  imports: [RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule],
   template: `
+    <nav class="migas" aria-label="Migas de pan">
+      <a routerLink="/">Inicio</a>
+      <mat-icon aria-hidden="true">chevron_right</mat-icon>
+      <span aria-current="page">Equipo</span>
+    </nav>
     <h1>Nuestro equipo</h1>
     <p class="entradilla">Los odontólogos que atienden en la clínica.</p>
 
@@ -35,72 +34,122 @@ import { PublicoService } from '../../services/publico.service';
 
     <ul class="fichas">
       @for (odontologo of odontologos(); track odontologo.id) {
-        <li class="ficha">
-          @if (odontologo.imagenUrl) {
-            <img [src]="odontologo.imagenUrl" alt="" />
-          } @else {
-            <div class="marcador" aria-hidden="true"><mat-icon>person</mat-icon></div>
-          }
-          <h2>{{ odontologo.nombres }} {{ odontologo.apellidos }}</h2>
+        <li class="ficha" [attr.data-spec]="principal(odontologo)">
+          <div class="arriba">
+            @if (odontologo.imagenUrl) {
+              <img class="avatar" [src]="odontologo.imagenUrl" alt="" />
+            } @else {
+              <span class="avatar" aria-hidden="true">{{ iniciales(odontologo) }}</span>
+            }
+            <div class="datos">
+              <h2>{{ odontologo.nombres }} {{ odontologo.apellidos }}</h2>
+              <p class="cop">{{ odontologo.cop }}</p>
+            </div>
+          </div>
           <p class="especialidades">{{ odontologo.especialidades.join(' · ') }}</p>
-          <!-- El valor ya viene con el prefijo («COP-10001»): anteponer otro lo duplica. -->
-          <p class="cop">{{ odontologo.cop }}</p>
+          <a mat-stroked-button routerLink="/disponibilidad">
+            <mat-icon aria-hidden="true">event</mat-icon>
+            Ver horarios
+          </a>
         </li>
       }
     </ul>
   `,
   styles: `
+    .migas {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .migas a {
+      color: var(--brand-ink);
+    }
+    .migas mat-icon {
+      width: 1rem;
+      height: 1rem;
+      font-size: 1rem;
+      color: var(--ink-faint);
+    }
     h1 {
-      font-size: 1.75rem;
-      margin: 0.5rem 0 0.5rem;
+      margin: var(--space-4) 0 0;
+      font: var(--text-display-md);
+      font-size: clamp(1.75rem, 3.4vw, 2.125rem);
+      letter-spacing: -0.015em;
     }
     .entradilla {
-      margin: 0 0 1.5rem;
-      opacity: 0.8;
+      margin: var(--space-2) 0 var(--space-8);
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
     }
     .fichas {
       list-style: none;
       margin: 0;
       padding: 0;
       display: grid;
-      gap: 1.25rem;
-      grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+      gap: var(--space-6);
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 18.75rem), 1fr));
     }
     .ficha {
-      border: 1px solid var(--mat-sys-outline-variant, #d9d9d9);
-      border-radius: 0.75rem;
-      padding: 1.1rem 1rem 1.25rem;
-      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
     }
-    img,
-    .marcador {
-      width: 7rem;
-      height: 7rem;
-      border-radius: 50%;
+    .ficha:hover {
+      box-shadow: var(--shadow-sm);
+      border-color: var(--border-strong);
+    }
+    .arriba {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+    .avatar {
+      width: 3rem;
+      height: 3rem;
+      flex: none;
+      border-radius: var(--radius-pill);
       object-fit: cover;
-      margin: 0 auto 0.75rem;
-      display: block;
-    }
-    .marcador {
       display: grid;
       place-items: center;
-      background: var(--mat-sys-surface-variant, #eceff1);
+      background: var(--spec-soft);
+      color: var(--spec);
+      font: 600 1rem/1 var(--font-display);
+    }
+    .datos {
+      min-width: 0;
     }
     .ficha h2 {
-      margin: 0 0 0.35rem;
-      font-size: 1.05rem;
-    }
-    .especialidades {
-      margin: 0 0 0.35rem;
-      font-size: 0.9rem;
+      margin: 0;
+      font: var(--text-title-sm);
     }
     .cop {
+      margin: 2px 0 0;
+      font: var(--text-code);
+      color: var(--ink-muted);
+    }
+    .especialidades {
       margin: 0;
-      font-size: 0.85rem;
-      opacity: 0.75;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .ficha a {
+      align-self: flex-start;
+      margin-top: auto;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
+    }
+    @media (max-width: 37.5rem) {
+      .ficha a {
+        align-self: stretch;
+        min-height: 2.75rem;
+      }
     }
   `,
 })
@@ -110,6 +159,15 @@ export class OdontologosPublicos implements OnInit {
   protected readonly odontologos = signal<OdontologoPublico[]>([]);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  /** Color del avatar: sale de su especialidad principal, nunca de un hash del nombre. */
+  protected principal(odontologo: OdontologoPublico): string | null {
+    return visualDeEspecialidad(odontologo.especialidades[0]).clave;
+  }
+
+  protected iniciales(odontologo: OdontologoPublico): string {
+    return (odontologo.nombres.charAt(0) + odontologo.apellidos.charAt(0)).toUpperCase();
+  }
 
   ngOnInit(): void {
     this.cargando.set(true);

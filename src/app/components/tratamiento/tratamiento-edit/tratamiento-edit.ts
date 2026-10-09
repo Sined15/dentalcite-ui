@@ -10,6 +10,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
@@ -27,11 +28,6 @@ import { EspecialidadService } from '../../../services/especialidad.service';
 import { TratamientoService } from '../../../services/tratamiento.service';
 import { buscarEnPaginas, cargarTodasLasPaginas } from '../../../shared/buscar-en-paginas';
 
-/**
- * RN-04: la duracion es multiplo de 15. El DTO solo declara `@Min(15)`; el
- * techo y el multiplo los imponen el servicio y una restriccion CHECK de la
- * base, asi que se validan aqui para no depender de un 400.
- */
 const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors | null => {
   const valor = control.value as number | null;
   if (valor === null || valor === undefined) {
@@ -47,19 +43,26 @@ const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors |
     MatButtonModule,
     MatCardModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatProgressBarModule,
     MatSelectModule,
   ],
   template: `
     <h1>{{ esEdicion() ? 'Editar tratamiento' : 'Nuevo tratamiento' }}</h1>
+    <p class="ayuda">
+      Lo que el paciente ve al pedir cita sale de aquí: el nombre, la duración y qué odontólogos
+      pueden atenderlo.
+    </p>
 
-    <mat-card class="tarjeta">
+    <mat-card class="tarjeta" appearance="outlined">
       @if (cargando()) {
         <mat-progress-bar mode="indeterminate" aria-label="Guardando" />
       }
       <mat-card-content>
         <form [formGroup]="formulario" (ngSubmit)="enviar()">
+          <section class="dc-seccion" aria-labelledby="seccion-id">
+          <h2 id="seccion-id">Identificación</h2>
           <div class="fila">
             <mat-form-field appearance="outline">
               <mat-label>Código</mat-label>
@@ -79,21 +82,19 @@ const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors |
           </div>
 
           <mat-form-field appearance="outline">
-            <mat-label>Descripcion (opcional)</mat-label>
+            <mat-label>Descripción (opcional)</mat-label>
             <textarea matInput rows="3" formControlName="descripcion"></textarea>
           </mat-form-field>
 
-          <!--
-            RF-09 y RF-10 (v4): ruta de la imagen del catalogo publico. No es una
-            subida: las de demostracion viajan con este cliente, en
-            public/img/catalogo/.
-          -->
           <mat-form-field appearance="outline">
             <mat-label>Imagen (opcional)</mat-label>
             <input matInput formControlName="imagenUrl" placeholder="/img/catalogo/ejemplo.svg" />
-            <mat-hint>Ruta o URL de la imagen que se ve en las paginas publicas</mat-hint>
+            <mat-hint>Ruta o URL de la imagen que se ve en las páginas públicas</mat-hint>
           </mat-form-field>
+          </section>
 
+          <section class="dc-seccion" aria-labelledby="seccion-dur">
+          <h2 id="seccion-dur">Duración y especialidad</h2>
           <div class="fila">
             <mat-form-field appearance="outline">
               <mat-label>Duración en minutos</mat-label>
@@ -105,15 +106,15 @@ const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors |
                 [max]="duracionMax"
                 [step]="duracionPaso"
               />
-              <mat-hint>Multiplo de {{ duracionPaso }}, entre {{ duracionMin }} y {{ duracionMax }}</mat-hint>
+              <mat-hint>Múltiplo de {{ duracionPaso }}, entre {{ duracionMin }} y {{ duracionMax }}</mat-hint>
               @if (formulario.controls.duracionMinutos.hasError('required')) {
                 <mat-error>La duración es obligatoria</mat-error>
               } @else if (formulario.controls.duracionMinutos.hasError('min')) {
-                <mat-error>La duracion minima es de {{ duracionMin }} minutos</mat-error>
+                <mat-error>La duración mínima es de {{ duracionMin }} minutos</mat-error>
               } @else if (formulario.controls.duracionMinutos.hasError('max')) {
-                <mat-error>La duracion maxima es de {{ duracionMax }} minutos</mat-error>
+                <mat-error>La duración máxima es de {{ duracionMax }} minutos</mat-error>
               } @else if (formulario.controls.duracionMinutos.hasError('multiplo')) {
-                <mat-error>Debe ser un multiplo de {{ duracionPaso }} minutos</mat-error>
+                <mat-error>Debe ser un múltiplo de {{ duracionPaso }} minutos</mat-error>
               }
             </mat-form-field>
 
@@ -126,9 +127,19 @@ const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors |
               </mat-select>
               @if (formulario.controls.especialidadId.hasError('required')) {
                 <mat-error>La especialidad es obligatoria</mat-error>
+              } @else {
+                <mat-hint>Solo los odontólogos con esta especialidad lo atenderán.</mat-hint>
               }
             </mat-form-field>
           </div>
+          <p class="dc-aviso">
+            <mat-icon aria-hidden="true">schedule</mat-icon>
+            <span>
+              Cada franja que ve el paciente dura lo mismo que el tratamiento y se ofrece cada
+              {{ duracionPaso }} minutos.
+            </span>
+          </p>
+          </section>
 
           @if (error(); as mensaje) {
             <p class="error" role="alert">{{ mensaje }}</p>
@@ -138,7 +149,6 @@ const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors |
             <button mat-button type="button" (click)="cancelar()">Cancelar</button>
             <button
               mat-flat-button
-              color="primary"
               type="submit"
               [disabled]="formulario.invalid || cargando()"
             >
@@ -151,8 +161,14 @@ const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors |
   `,
   styles: `
     h1 {
-      font-size: 1.5rem;
-      margin: 0 0 1rem;
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
+      margin: 0 0 var(--space-5);
+    }
+    .ayuda {
+      margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
     }
     .tarjeta {
       max-width: 42rem;
@@ -176,9 +192,17 @@ const multiploDe15: ValidatorFn = (control: AbstractControl): ValidationErrors |
       gap: 0.5rem;
       margin-top: 1rem;
     }
+    @media (max-width: 30rem) {
+      .acciones {
+        flex-direction: column-reverse;
+      }
+      .acciones button {
+        width: 100%;
+      }
+    }
     .error {
-      color: var(--mat-sys-error, #b3261e);
-      font-size: 0.875rem;
+      color: var(--danger-ink);
+      font: var(--text-body-sm);
     }
   `,
 })
@@ -219,7 +243,6 @@ export class TratamientoEdit {
   });
 
   constructor() {
-    // Solo las especialidades activas pueden exigirse en un tratamiento.
     cargarTodasLasPaginas((pagina) =>
       this.especialidadService.listar({ page: pagina, size: 100, sort: 'nombre,asc' }),
     ).subscribe({
@@ -259,7 +282,6 @@ export class TratamientoEdit {
     );
   }
 
-  /** Se lee `especialidad` anidada y se escribe `especialidadId` plano. */
   private rellenar(fila: Tratamiento): void {
     this.formulario.patchValue({
       codigo: fila.codigo,
@@ -285,7 +307,6 @@ export class TratamientoEdit {
       descripcion: valores.descripcion || undefined,
       duracionMinutos: valores.duracionMinutos,
       especialidadId: valores.especialidadId,
-      // PUT reemplaza el recurso entero: omitir la imagen la borraria.
       imagenUrl: valores.imagenUrl || undefined,
     };
 

@@ -33,7 +33,6 @@ function cita(id: string, fecha: string, estado: EstadoCita): CitaResumen {
   };
 }
 
-/** Una en el pasado lejano y otra en el futuro lejano: nada al filo de hoy. */
 const DETALLE: PacienteDetalle = {
   id: FICHA_ID,
   numeroHistoria: 'HC-00001',
@@ -67,7 +66,6 @@ interface Interno {
 
 const URL_PLANES = `${environment.apiUrl}/api/v1/planes`;
 
-/** Un plan activo de seis sesiones, todas pendientes (HU-17). */
 const PLAN: Plan = {
   id: 'plan-1',
   paciente: { id: FICHA_ID, nombre: 'Ramos, Julio' },
@@ -92,7 +90,6 @@ const PLAN: Plan = {
 const URL_PERFIL = `${environment.apiUrl}/api/v1/usuarios/me`;
 const URL_ODONTOLOGOS = `${environment.apiUrl}/api/v1/odontologos`;
 
-/** La ficha que comparten la cuenta y el registro del odontólogo que firma el plan. */
 const FICHA_DEL_AUTOR = 'fic-odo-1';
 
 function paginaCon(content: unknown[]): Record<string, unknown> {
@@ -109,10 +106,6 @@ function paginaCon(content: unknown[]): Record<string, unknown> {
   };
 }
 
-/**
- * Resuelve «yo» a un registro de odontólogo, que es lo que decide si se ofrece
- * cerrar una sesión: de la cuenta sale la ficha y de la ficha el registro.
- */
 function resolverMiRegistro(httpMock: HttpTestingController, fichaDeLaCuenta: string): void {
   httpMock.expectOne(URL_PERFIL).flush({ id: 'usu-1', rol: 'ODONTOLOGO', fichaId: fichaDeLaCuenta });
   httpMock
@@ -120,7 +113,6 @@ function resolverMiRegistro(httpMock: HttpTestingController, fichaDeLaCuenta: st
     .flush(paginaCon([{ id: 'odo-1', fichaId: FICHA_DEL_AUTOR, activo: true }]));
 }
 
-/** El plan con su primera sesión ya atendida: la única que se puede cerrar. */
 const CON_UNA_ATENDIDA: Plan = {
   ...PLAN,
   sesiones: PLAN.sesiones.map((s) =>
@@ -134,20 +126,12 @@ const CON_UNA_ATENDIDA: Plan = {
   ),
 };
 
-/**
- * HU-13 · RF-08 y la sección de planes que HU-17 añade. Lo que se comprueba: que
- * la ficha se pinta con sus alergias y sus citas repartidas en pasadas y
- * futuras, que el formulario de corrección solo aparece para quien RF-08
- * autoriza a editar, y que los planes solo se piden y se pintan para quien puede
- * planificar.
- */
 describe('PacienteFicha', () => {
   let fixture: ComponentFixture<PacienteFicha>;
   let httpMock: HttpTestingController;
   let componente: Interno;
 
   function montar(rol: string): void {
-    // AuthService lee el token al construirse: hay que dejarlo antes del TestBed.
     localStorage.setItem(
       'dentalcite.token',
       tokenCon({
@@ -208,7 +192,6 @@ describe('PacienteFicha', () => {
     req.flush({ ...DETALLE, telefono: '999111222', alergias: 'Penicilina y latex' });
   });
 
-  /** RF-08 deja al odontólogo en lectura: no se le ofrece un botón que dará 403. */
   it('como odontologo no ofrece el formulario de edicion', () => {
     montar('ODONTOLOGO');
     httpMock.expectOne(URL).flush(DETALLE);
@@ -216,7 +199,6 @@ describe('PacienteFicha', () => {
     expect(componente.puedeEditar()).toBe(false);
   });
 
-  /** RNF-06: el 403 del servidor es la defensa, y aquí se explica. */
   it('muestra el mensaje del 403 cuando la ficha no le corresponde', () => {
     montar('ODONTOLOGO');
     httpMock
@@ -229,9 +211,6 @@ describe('PacienteFicha', () => {
     expect(componente.error()).toContain('No ha atendido a este paciente');
   });
 
-  // ------------------------------------------------------------------
-  // HU-17 · los planes de tratamiento
-  // ------------------------------------------------------------------
 
   it('HU-17: como odontologo pide los planes del paciente', () => {
     montar('ODONTOLOGO');
@@ -247,13 +226,10 @@ describe('PacienteFicha', () => {
   });
 
   it('HU-17: como recepcion no los pide siquiera', () => {
-    // El servidor le responderia 403: pintarle una seccion vacia prometeria algo
-    // que no puede abrir.
     montar('RECEPCIONISTA');
     httpMock.expectOne(URL).flush(DETALLE);
 
     expect(componente.puedePlanificar()).toBe(false);
-    // Si se hubiera pedido, esto fallaria: no queda ninguna peticion pendiente.
     httpMock.verify();
   });
 
@@ -299,7 +275,6 @@ describe('PacienteFicha', () => {
 
     const raiz = fixture.nativeElement as HTMLElement;
     expect(raiz.querySelector('button[aria-label^="Suspender el plan"]')).toBeNull();
-    // RN-12: el registro se conserva, con su motivo a la vista.
     expect(raiz.textContent).toContain('El paciente se muda');
   });
 
@@ -336,9 +311,6 @@ describe('PacienteFicha', () => {
     expect(filas[1]).not.toContain('CIT-');
   });
 
-  // ------------------------------------------------------------------
-  // El cierre de la sesión con sus recomendaciones
-  // ------------------------------------------------------------------
 
   it('ofrece cerrar la sesion atendida al odontologo que firmo el plan', async () => {
     montar('ODONTOLOGO');
@@ -350,13 +322,10 @@ describe('PacienteFicha', () => {
 
     const raiz = fixture.nativeElement as HTMLElement;
     expect(raiz.querySelector('button[aria-label^="Cerrar la sesión 1"]')).not.toBeNull();
-    // La pendiente no se cierra: no hay ninguna consulta de la que hablar.
     expect(raiz.querySelector('button[aria-label^="Cerrar la sesión 2"]')).toBeNull();
   });
 
   it('a un odontologo que no firmo el plan no se le ofrece cerrar', async () => {
-    // El servidor le responderia 403 por la autoria del plan: ofrecerle el boton
-    // seria prometerle algo que no puede hacer.
     montar('ODONTOLOGO');
     httpMock.expectOne(URL).flush(DETALLE);
     httpMock.expectOne((r) => r.url === URL_PLANES).flush([CON_UNA_ATENDIDA]);
@@ -396,7 +365,6 @@ describe('PacienteFicha', () => {
     expect(raiz.textContent).toContain('Mantener dieta blanda');
     expect(raiz.textContent).toContain('Próximo control');
     expect(raiz.textContent).toContain('Volver antes si hay dolor');
-    // Y ya no se ofrece cerrarla otra vez: el servidor responderia 409.
     expect(raiz.querySelector('button[aria-label^="Cerrar la sesión 1"]')).toBeNull();
   });
 });

@@ -14,15 +14,7 @@ import { passwordGuard } from './password.guard';
 import { rolGuard } from './rol.guard';
 import { sinSesionGuard } from './sin-sesion.guard';
 
-/**
- * Los guards son la unica barrera de navegacion del cliente, y reflejan reglas
- * que el backend impone de verdad: `SecurityConfig` responde 403 a un rol
- * insuficiente, y `PasswordFilter` cierra la aplicacion entera mientras el
- * token exija cambiar la contraseña provisional. Si se rompen, el usuario
- * choca contra pantallas muertas en vez de ser redirigido.
- */
 
-/** JWT sin firmar: solo interesa el payload, que es lo unico que se decodifica. */
 function tokenCon(payload: Record<string, unknown>): string {
   const b64 = (o: unknown) =>
     btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -39,10 +31,6 @@ function sesion(rol: string, requiereCambio = false): string {
   });
 }
 
-/**
- * `AuthService` lee el token al construirse, asi que hay que dejarlo en
- * `localStorage` antes de levantar el TestBed.
- */
 function conSesion(token: string | null): void {
   TestBed.resetTestingModule();
   localStorage.clear();
@@ -52,7 +40,6 @@ function conSesion(token: string | null): void {
   TestBed.configureTestingModule({ providers: [provideRouter([])] });
 }
 
-/** Devuelve el veredicto crudo del guard: `true` o el arbol de redireccion. */
 function veredicto(
   guard: typeof rolGuard | typeof passwordGuard,
   roles?: string[],
@@ -63,16 +50,11 @@ function veredicto(
   return TestBed.runInInjectionContext(() => guard(ruta, estado)) as boolean | UrlTree;
 }
 
-/** Devuelve 'true' si el guard deja pasar, o la ruta de redireccion. */
 function resultado(guard: typeof rolGuard | typeof passwordGuard, roles?: string[]): string {
   const r = veredicto(guard, roles);
   return r instanceof UrlTree ? r.toString() : String(r);
 }
 
-/**
- * El `returnUrl` tal como queda en el arbol, sin pasar por `toString()`: asi la
- * prueba dice que el destino se conserva, y no como Angular escapa las barras.
- */
 function returnUrlDe(guard: typeof rolGuard | typeof passwordGuard, url: string): unknown {
   const r = veredicto(guard, ['ADMINISTRADOR'], url);
   return r instanceof UrlTree ? r.queryParams['returnUrl'] : null;
@@ -92,7 +74,6 @@ describe('rolGuard', () => {
   });
 
   it('manda a /sin-permiso, no al login, cuando el rol no alcanza', () => {
-    // Distinguirlo del login importa: la sesion es valida, lo que falta es permiso.
     conSesion(sesion('PACIENTE'));
     expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/sin-permiso');
   });
@@ -117,11 +98,6 @@ describe('rolGuard', () => {
     expect(resultado(rolGuard, ['ADMINISTRADOR'])).toBe('/login?returnUrl=%2Fdestino');
   });
 
-  /**
-   * HU-06 (v4): el visitante que pulsa «pedir cita» en el catalogo publico pedia
-   * una franja concreta. Sin esto, el login lo dejaria en la portada de su rol y
-   * tendria que rehacer el camino a mano.
-   */
   it('conserva la query del destino dentro de returnUrl', () => {
     conSesion(null);
     expect(returnUrlDe(rolGuard, '/disponibilidad?tratamientoId=tra-1')).toBe(

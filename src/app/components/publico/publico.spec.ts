@@ -17,10 +17,6 @@ import { OdontologosPublicos } from './odontologos-publicos';
 import { Portada } from './portada';
 import { PublicoLayout } from './publico-layout';
 
-/**
- * El area publica (HU-06, v4). Lo que estas pruebas fijan no es que se pinte algo,
- * sino que se pinte **solo** lo que el criterio concede al visitante.
- */
 const API = `${environment.apiUrl}/api/v1/publico`;
 
 const ESPECIALIDADES: EspecialidadPublica[] = [
@@ -110,7 +106,6 @@ describe('EspecialidadesPublicas', () => {
     fixture.detectChanges();
 
     const imagenes = (fixture.nativeElement as HTMLElement).querySelectorAll('img');
-    // La segunda no tiene imagen: cae en el marcador, no en un hueco roto.
     expect(imagenes.length).toBe(1);
     expect(imagenes[0].getAttribute('src')).toBe('/img/catalogo/especialidad-ortodoncia.svg');
     expect(texto(fixture)).toContain('Ortodoncia');
@@ -152,12 +147,6 @@ describe('EspecialidadDetalle', () => {
     http.verify();
   });
 
-  /**
-   * El ultimo criterio de HU-06: «y podre pedir cita desde ahi». El enlace lleva
-   * el tratamiento en la URL, que es lo que permite que la pantalla de
-   * disponibilidad abra con el ya elegido; sin ese identificador el boton seria
-   * un atajo a un formulario vacio.
-   */
   it('cada tratamiento ofrece pedir cita con ese tratamiento en la URL', async () => {
     const { fixture, http } = await montar(EspecialidadDetalleComponent, { id: 'esp-1' });
     fixture.detectChanges();
@@ -187,11 +176,8 @@ describe('OdontologosPublicos', () => {
     const contenido = texto(fixture);
     expect(contenido).toContain('Luis Pérez');
     expect(contenido).toContain('Odontología General · Ortodoncia');
-    // El COP se pinta tal cual: el valor ya lleva el prefijo, y esta prueba
-    // llegó a fijar el «COP COP-10001» duplicado en vez de cazarlo.
     expect(contenido).toContain('COP-10001');
     expect(contenido).not.toContain('COP COP-10001');
-    // RF-10 (v4) pide ficha, no tabla.
     expect((fixture.nativeElement as HTMLElement).querySelector('table')).toBeNull();
     http.verify();
   });

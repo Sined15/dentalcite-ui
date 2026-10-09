@@ -5,6 +5,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
@@ -33,34 +34,39 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
     MatCardModule,
     MatCheckboxModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatProgressBarModule,
     MatSelectModule,
   ],
   template: `
     <h1>{{ esEdicion() ? 'Editar cuenta' : 'Nueva cuenta' }}</h1>
+    <p class="ayuda">
+      Da acceso a una persona del equipo o a un paciente. La persona cambia la contraseña
+      provisional al entrar por primera vez.
+    </p>
 
-    <mat-card class="tarjeta">
+    <mat-card class="tarjeta" appearance="outlined">
       @if (cargando()) {
         <mat-progress-bar mode="indeterminate" aria-label="Guardando" />
       }
       <mat-card-content>
         <form [formGroup]="formulario" (ngSubmit)="enviar()">
           @if (!esEdicion()) {
-            <!--
-              Esta pantalla reparte credenciales; no da de alta personas. Quien
-              tiene expediente clinico nace donde se recogen los datos que su rol
-              exige, y su cuenta sale de ahi.
-            -->
-            <p class="aviso">
-              Aquí se reparten credenciales. Al odontólogo se le registra en
-              <a routerLink="/odontologos/nuevo">Odontólogos</a>, con su colegiatura y sus
-              especialidades, y su cuenta se crea ahí mismo. Al paciente se le da de alta en
-              <a routerLink="/pacientes/nuevo">Pacientes</a>, con su consentimiento; su cuenta
-              se crea aquí, después, para que pueda entrar al portal.
+            <p class="dc-aviso">
+              <mat-icon aria-hidden="true">info</mat-icon>
+              <span>
+                Aquí se reparten credenciales. Al odontólogo se le registra en
+                <a routerLink="/odontologos/nuevo">Odontólogos</a>, con su colegiatura y sus
+                especialidades, y su cuenta se crea ahí mismo. Al paciente se le da de alta en
+                <a routerLink="/pacientes/nuevo">Pacientes</a>, con su consentimiento; su cuenta
+                se crea aquí, después, para que pueda entrar al portal.
+              </span>
             </p>
           }
 
+          <section class="dc-seccion" aria-labelledby="seccion-persona">
+          <h2 id="seccion-persona">Persona</h2>
           <mat-form-field appearance="outline">
             <mat-label>Nombre</mat-label>
             <input matInput formControlName="nombre" />
@@ -73,7 +79,7 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
             <mat-form-field appearance="outline">
               <mat-label>Correo</mat-label>
               <input matInput type="email" formControlName="correo" />
-              <mat-hint>El correo no se puede cambiar despues del alta</mat-hint>
+              <mat-hint>El correo no se puede cambiar después del alta</mat-hint>
               @if (formulario.controls.correo.hasError('required')) {
                 <mat-error>El correo es obligatorio</mat-error>
               } @else if (formulario.controls.correo.hasError('email')) {
@@ -82,12 +88,10 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
             </mat-form-field>
           }
 
-          <!--
-            En alta faltan los odontologos, que se dan de alta con su registro
-            profesional en su propio menu. En edicion estan los cuatro, porque
-            cambiar el rol de una cuenta que ya existe es cosa del administrador, y
-            es lo que permite ascender a odontologo a quien ya tenia cuenta.
-          -->
+          </section>
+
+          <section class="dc-seccion" aria-labelledby="seccion-acceso">
+          <h2 id="seccion-acceso">Acceso</h2>
           <mat-form-field appearance="outline">
             <mat-label>Rol</mat-label>
             <mat-select formControlName="rol">
@@ -101,16 +105,13 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
           </mat-form-field>
 
           @if (esAltaDePaciente()) {
-            <!--
-              La cuenta del paciente se levanta sobre la ficha que ya tiene, y el
-              documento es lo que la encuentra. Sin ficha la cuenta no puede
-              reservar —el servidor responde 403—, que es lo unico que el paciente
-              iba a hacer con ella.
-            -->
-            <p class="nota">
-              Da acceso al portal a un paciente que ya está registrado. Si todavía no lo está,
-              regístralo primero en <a routerLink="/pacientes/nuevo">Pacientes</a>, con su
-              consentimiento.
+            <p class="dc-aviso">
+              <mat-icon aria-hidden="true">info</mat-icon>
+              <span>
+                Da acceso al portal a un paciente que ya está registrado. Si todavía no lo está,
+                regístralo primero en <a routerLink="/pacientes/nuevo">Pacientes</a>, con su
+                consentimiento.
+              </span>
             </p>
 
             <div class="fila">
@@ -143,7 +144,7 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
                 formControlName="passwordProvisional"
                 autocomplete="off"
               />
-              <mat-hint>Si la dejas vacia, el sistema la genera y la muestra una sola vez</mat-hint>
+              <mat-hint>Si la dejas vacía, el sistema la genera y la muestra una sola vez</mat-hint>
               @if (formulario.controls.passwordProvisional.hasError('minlength')) {
                 <mat-error>Debe tener al menos 8 caracteres</mat-error>
               }
@@ -151,9 +152,10 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
           } @else {
             <mat-checkbox formControlName="activo">Cuenta activa</mat-checkbox>
             <p class="nota">
-              Desactivarla le impide iniciar sesion (RN-12) e invalida sus tokens vigentes.
+              Desactivarla le impide iniciar sesión y cierra las sesiones que tenga abiertas.
             </p>
           }
+          </section>
 
           @if (error(); as mensaje) {
             <p class="error" role="alert">{{ mensaje }}</p>
@@ -163,7 +165,6 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
             <button mat-button type="button" (click)="cancelar()">Cancelar</button>
             <button
               mat-flat-button
-              color="primary"
               type="submit"
               [disabled]="formulario.invalid || cargando()"
             >
@@ -176,8 +177,14 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
   `,
   styles: `
     h1 {
-      font-size: 1.5rem;
-      margin: 0 0 1rem;
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
+      margin: 0 0 var(--space-5);
+    }
+    .ayuda {
+      margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
     }
     .tarjeta {
       max-width: 40rem;
@@ -201,21 +208,22 @@ import { PasswordGeneradaDialogo } from '../password-generada-dialogo';
       gap: 0.5rem;
       margin-top: 1rem;
     }
-    .error {
-      color: var(--mat-sys-error, #b3261e);
-      font-size: 0.875rem;
+    @media (max-width: 30rem) {
+      .acciones {
+        flex-direction: column-reverse;
+      }
+      .acciones button {
+        width: 100%;
+      }
     }
-    .aviso {
-      background: var(--mat-sys-surface-container, #eee);
-      padding: 0.75rem 1rem;
-      border-radius: 0.5rem;
-      font-size: 0.875rem;
-      margin: 0 0 1rem;
+    .error {
+      color: var(--danger-ink);
+      font: var(--text-body-sm);
     }
     .nota {
-      font-size: 0.8125rem;
-      opacity: 0.75;
-      margin: 0.25rem 0 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+      margin: var(--space-1) 0 0;
     }
   `,
 })
@@ -256,9 +264,6 @@ export class UsuarioEdit {
   );
 
   constructor() {
-    // El documento solo se pide —y solo se exige— para la cuenta del paciente:
-    // recepcion y administracion no tienen expediente clinico, y crearles una
-    // ficha dejaba en el padron un paciente sin nombre.
     effect(() => {
       const doc = this.formulario.controls.documento;
       if (this.esAltaDePaciente()) {
@@ -270,8 +275,6 @@ export class UsuarioEdit {
     });
 
     if (this.id) {
-      // En edicion el correo no se envia: el PUT solo reemplaza nombre, rol y
-      // estado.
       this.formulario.controls.correo.disable();
       this.formulario.controls.tipoDocumento.disable();
       this.formulario.controls.documento.disable();
@@ -290,7 +293,6 @@ export class UsuarioEdit {
       return;
     }
 
-    // A diferencia del catalogo, usuarios si expone GET /{id}.
     this.cargando.set(true);
     this.servicio.obtener(this.id as string).subscribe({
       next: (usuario) => {
@@ -323,7 +325,6 @@ export class UsuarioEdit {
     const valores = this.formulario.getRawValue();
 
     if (this.id) {
-      // PUT: reemplazo total, los tres campos obligatorios.
       this.servicio
         .reemplazar(this.id, {
           nombre: valores.nombre,
@@ -349,22 +350,9 @@ export class UsuarioEdit {
       return;
     }
 
-    // Recepcion y administracion van sin documento: nada en el sistema las
-    // resuelve por su ficha, y la que se creaba nacia sin nombres y se colaba en
-    // el padron como un paciente identificado solo por su numero de historia.
     this.crearCuenta();
   }
 
-  /**
-   * La cuenta del paciente se comprueba contra el padron antes de crearla.
-   *
-   * <p>El administrador la crea para que el paciente entre al portal, y para eso
-   * la cuenta necesita ficha: sin ella no puede reservar. Mandar el documento a
-   * ciegas tambien sirve —el servidor vincula la ficha si existe—, pero cuando no
-   * existe la crea sin nombres ni consentimiento, y entonces la cuenta es de
-   * alguien que no esta registrado como paciente. Buscarlo primero convierte ese
-   * caso en un aviso que dice donde registrarlo.
-   */
   private crearCuentaDePaciente(): void {
     const valores = this.formulario.getRawValue();
     const documento = valores.documento.trim();
@@ -397,10 +385,6 @@ export class UsuarioEdit {
     });
   }
 
-  /**
-   * El alta en si. El documento viaja solo en la cuenta del paciente, que es la
-   * unica que se levanta sobre una ficha.
-   */
   private crearCuenta(): void {
     const valores = this.formulario.getRawValue();
     const deUnPaciente = this.esAltaDePaciente();
@@ -417,7 +401,6 @@ export class UsuarioEdit {
       .subscribe({
         next: (creado) => {
           this.cargando.set(false);
-          // El backend solo devuelve la contraseña si la genero el.
           if (creado.passwordProvisional) {
             this.dialogo.open(PasswordGeneradaDialogo, {
               data: { nombre: creado.nombre, password: creado.passwordProvisional },

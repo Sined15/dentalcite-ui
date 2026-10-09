@@ -54,11 +54,6 @@ interface Interno {
   error: () => string | null;
 }
 
-/**
- * Lo que se fija aquí: que no se pueda enviar un cierre sin
- * recomendación ni sin fecha, que la fecha viaje en la del calendario local y no en
- * la de UTC, y que los rechazos del servidor se lean sin perder lo escrito.
- */
 describe('CerrarSesionDialogo', () => {
   let fixture: ComponentFixture<CerrarSesionDialogo>;
   let httpMock: HttpTestingController;
@@ -99,8 +94,6 @@ describe('CerrarSesionDialogo', () => {
   });
 
   it('sin ninguna recomendacion no deja enviar', () => {
-    // El criterio pide 400 en ese caso: el boton deshabilitado es para que ese 400
-    // sea la red y no el camino normal.
     montar();
     componente.proximoControl = new Date(2026, 9, 15);
 
@@ -121,8 +114,6 @@ describe('CerrarSesionDialogo', () => {
   });
 
   it('eligiendo primero la recomendacion y despues la fecha habilita el boton', () => {
-    // Es el orden natural en pantalla: la casilla repinta el boton antes de que
-    // haya fecha, y el veredicto no puede quedarse con aquel primer «no».
     montar();
     componente.alternar(CATALOGO[0]);
     fixture.detectChanges();
@@ -134,7 +125,6 @@ describe('CerrarSesionDialogo', () => {
   });
 
   it('envia lo elegido con la fecha local, no la de UTC', () => {
-    // Una fecha a medianoche pasada por `toISOString()` retrocede un dia en Lima.
     montar();
     componente.alternar(CATALOGO[0]);
     componente.alternar(CATALOGO[1]);
@@ -217,8 +207,6 @@ describe('CerrarSesionDialogo', () => {
   });
 
   it('advierte que la observacion no es una indicacion clinica', () => {
-    // Es la frontera que el alcance del proyecto no cruza, y el criterio pide que
-    // la interfaz lo advierta.
     montar();
 
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';

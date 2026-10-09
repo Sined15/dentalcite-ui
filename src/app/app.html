@@ -8,17 +8,15 @@
       role="navigation"
     >
       <div class="marca">
-        <mat-icon aria-hidden="true">dentistry</mat-icon>
-        <span>DentalCite</span>
+        <span class="sello" aria-hidden="true"><mat-icon>medical_services</mat-icon></span>
+        <span>Dental<b>Cite</b></span>
       </div>
       <mat-nav-list>
         @for (entrada of entradas(); track entrada.etiqueta) {
+          @if (entrada.rotulo; as rotulo) {
+            <h2 matSubheader class="rotulo">{{ rotulo }}</h2>
+          }
           @if (entrada.hijos; as hijos) {
-            <!--
-              Un boton de verdad y no un enlace con destino falso: Enter, Espacio
-              y el foco visible vienen dados, que es lo que miran los criterios
-              2.1.1 y 2.4.7 de RNF-08.
-            -->
             <button
               mat-list-item
               type="button"
@@ -35,10 +33,6 @@
               </mat-icon>
             </button>
 
-            <!--
-              Plegado es fuera del DOM, no oculto con CSS: asi los hijos tampoco
-              estan en el recorrido del tabulador mientras no se ven.
-            -->
             @if (estaAbierto(entrada)) {
               <div
                 [id]="'grupo-' + entrada.etiqueta"
@@ -65,6 +59,7 @@
               mat-list-item
               [routerLink]="entrada.ruta"
               routerLinkActive
+              [routerLinkActiveOptions]="opcionesDeActivo(entrada)"
               #enlace="routerLinkActive"
               [activated]="enlace.isActive"
             >
@@ -77,19 +72,19 @@
     </mat-sidenav>
 
     <mat-sidenav-content>
-      <mat-toolbar color="primary" class="barra">
+      <mat-toolbar class="barra">
         <button
           mat-icon-button
           type="button"
           (click)="cajonAbierto.set(!cajonAbierto())"
           [attr.aria-expanded]="cajonAbierto()"
-          aria-label="Mostrar u ocultar el menu de navegacion"
+          aria-label="Mostrar u ocultar el menú de navegación"
         >
           <mat-icon>menu</mat-icon>
         </button>
-        <span class="marca-barra">DentalCite</span>
+        <span class="marca-barra">Dental<b>Cite</b></span>
         <span class="expansor"></span>
-        <span class="rol">{{ rol() }}</span>
+        <span class="rol">{{ etiquetaDeRol() }}</span>
         <button mat-icon-button type="button" [matMenuTriggerFor]="menu" aria-label="Mi cuenta">
           <mat-icon>account_circle</mat-icon>
         </button>
@@ -112,6 +107,21 @@
       <main class="contenido">
         <router-outlet />
       </main>
+
+      @if (rol() === 'PACIENTE') {
+        <nav class="pestanas" aria-label="Accesos del paciente">
+          @for (pestana of pestanas; track pestana.ruta) {
+            <a
+              [routerLink]="pestana.ruta"
+              routerLinkActive="activa"
+              [routerLinkActiveOptions]="{ exact: true }"
+            >
+              <mat-icon aria-hidden="true">{{ pestana.icono }}</mat-icon>
+              {{ pestana.etiqueta }}
+            </a>
+          }
+        </nav>
+      }
     </mat-sidenav-content>
   </mat-sidenav-container>
 } @else {

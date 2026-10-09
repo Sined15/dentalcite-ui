@@ -32,37 +32,17 @@ import { CancelarDialogo, CancelarDialogoDatos } from './cancelar-dialogo';
 import { avisoDeResultado, ResultadoDialogo, ResultadoDialogoDatos } from './resultado-dialogo';
 import { HistorialDialogo, HistorialDialogoDatos } from './historial-dialogo';
 
-/** Hoy a medianoche local: el calendario trabaja con fechas, no con instantes. */
 function hoy(): Date {
   const ahora = new Date();
   return new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 }
 
-/**
- * El dia como lo espera la API: "YYYY-MM-DD" en hora local.
- *
- * No sirve `toISOString()`: pasa por UTC, y en Lima una fecha a medianoche
- * retrocederia al dia anterior.
- */
 function aIso(fecha: Date): string {
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   const dia = String(fecha.getDate()).padStart(2, '0');
   return `${fecha.getFullYear()}-${mes}-${dia}`;
 }
 
-/**
- * La agenda de la clinica (HU-11 · RF-18, RF-20, RF-21).
- *
- * Solo RECEPCIONISTA y ADMINISTRADOR: expone las citas de todos los pacientes.
- * Que el paciente vea y cancele las suyas es HU-15, con la ventana de RN-06.
- *
- * Arranca en el dia de hoy porque «las citas del dia» es el caso que la historia
- * nombra; el rango se ensancha desde ahi.
- *
- * La paginacion es del **servidor**, no como en los catalogos: una agenda crece
- * sin techo con el tiempo, asi que traerla entera para cortarla en el navegador
- * dejaria de funcionar justo cuando la clinica llevara tiempo operando.
- */
 @Component({
   selector: 'app-agenda',
   providers: [provideNativeDateAdapter()],
@@ -85,11 +65,6 @@ function aIso(fecha: Date): string {
     </header>
 
     <form [formGroup]="formulario" (ngSubmit)="consultar()" class="filtros">
-      <!--
-        El campo es de solo lectura y abre el calendario al pulsarlo: la fecha
-        se marca, no se teclea. Escribirla a mano admite dias que no existen y
-        formatos que el servidor rechaza con un 400 que no explica nada.
-      -->
       <mat-form-field appearance="outline">
         <mat-label>Desde</mat-label>
         <input
@@ -117,11 +92,6 @@ function aIso(fecha: Date): string {
         <mat-datepicker #calendarioHasta [dateClass]="diasCerrados()" />
       </mat-form-field>
 
-      <!--
-        Al odontologo no se le pinta: el servidor le devuelve las suyas y
-        descarta el filtro, asi que el desplegable prometeria algo que no puede
-        cumplir. Lo mismo vale para la columna del odontologo en la tabla.
-      -->
       @if (!esOdontologo) {
         <mat-form-field appearance="outline">
           <mat-label>Odontólogo</mat-label>
@@ -146,7 +116,7 @@ function aIso(fecha: Date): string {
         </mat-select>
       </mat-form-field>
 
-      <button mat-flat-button color="primary" type="submit" [disabled]="formulario.invalid">
+      <button mat-flat-button type="submit" [disabled]="formulario.invalid">
         <mat-icon>search</mat-icon>
         Consultar
       </button>
@@ -164,62 +134,78 @@ function aIso(fecha: Date): string {
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de citas">
+    @if (!cargando() && citas().length > 0) {
+      <p class="resumen">
+        <strong>{{ total() }} {{ total() === 1 ? 'cita' : 'citas' }}</strong>
+        @for (grupo of conteo(); track grupo.estado) {
+          <span [class]="'dc-estado dc-estado--' + tonoEstado(grupo.estado)">
+            <mat-icon aria-hidden="true">{{ iconoEstado(grupo.estado) }}</mat-icon>
+            {{ grupo.n }} {{ etiquetaConteo(grupo.estado, grupo.n) }}
+          </span>
+        }
+      </p>
+    }
+
+    <div class="tabla-scroll tabla-apilable" tabindex="0" role="region" aria-label="Tabla de citas">
       <table mat-table [dataSource]="citas()">
         <ng-container matColumnDef="hora">
           <th mat-header-cell *matHeaderCellDef>Hora</th>
-          <td mat-cell *matCellDef="let fila">
-            <strong>{{ fila.hora.slice(0, 5) }}</strong>
-            <span class="dia">{{ fila.fecha | date: 'd MMM' }}</span>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Hora">
+            <span class="valor">
+              <strong class="hora">{{ fila.hora.slice(0, 5) }}</strong>
+              <span class="dia">{{ fila.fecha | date: 'd MMM' }}</span>
+            </span>
           </td>
         </ng-container>
 
         <ng-container matColumnDef="paciente">
           <th mat-header-cell *matHeaderCellDef>Paciente</th>
-          <td mat-cell *matCellDef="let fila">
-            {{ fila.paciente.nombre }}
-            <span class="historia">{{ fila.paciente.numeroHistoria }}</span>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Paciente">
+            <span class="valor">
+              {{ fila.paciente.nombre }}
+              <span class="historia">{{ fila.paciente.numeroHistoria }}</span>
+            </span>
           </td>
         </ng-container>
 
         <ng-container matColumnDef="odontologo">
           <th mat-header-cell *matHeaderCellDef>Odontólogo</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.odontologo.nombre }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Odontólogo">{{ fila.odontologo.nombre }}</td>
         </ng-container>
 
         <ng-container matColumnDef="tratamiento">
           <th mat-header-cell *matHeaderCellDef>Tratamiento</th>
-          <td mat-cell *matCellDef="let fila">
-            {{ fila.tratamiento.nombre }}
-            <span class="dia">{{ fila.duracionMinutos }} min</span>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Tratamiento">
+            <span class="valor">
+              {{ fila.tratamiento.nombre }}
+              <span class="dia">{{ fila.duracionMinutos }} min</span>
+            </span>
           </td>
         </ng-container>
 
         <ng-container matColumnDef="consultorio">
           <th mat-header-cell *matHeaderCellDef>Consultorio</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.consultorio.nombre }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Consultorio">{{ fila.consultorio.nombre }}</td>
         </ng-container>
 
         <ng-container matColumnDef="estado">
           <th mat-header-cell *matHeaderCellDef>Estado</th>
-          <td mat-cell *matCellDef="let fila">
-            <span class="estado" [class.cancelada]="fila.estado === 'CANCELADA'">
-              {{ etiquetaEstado(fila.estado) }}
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Estado">
+            <span class="valor">
+              <span [class]="'dc-estado dc-estado--' + tonoEstado(fila.estado)">
+                <mat-icon aria-hidden="true">{{ iconoEstado(fila.estado) }}</mat-icon>
+                {{ etiquetaEstado(fila.estado) }}
+              </span>
+              @if (fila.motivoCancelacion) {
+                <span class="dia">{{ fila.motivoCancelacion }}</span>
+              }
             </span>
-            @if (fila.motivoCancelacion) {
-              <span class="dia">{{ fila.motivoCancelacion }}</span>
-            }
           </td>
         </ng-container>
 
         <ng-container matColumnDef="acciones">
           <th mat-header-cell *matHeaderCellDef class="col-acciones">Acciones</th>
           <td mat-cell *matCellDef="let fila" class="col-acciones">
-            <!--
-              La bitacora y la cancelacion son de recepcion: al odontologo el
-              servidor le responde 403 en las dos, asi que en su agenda no se le
-              ofrecen. Lo que si le toca es registrar el resultado de las suyas.
-            -->
             @if (!esOdontologo) {
               <button
                 mat-icon-button
@@ -230,11 +216,6 @@ function aIso(fecha: Date): string {
                 <mat-icon>history</mat-icon>
               </button>
             }
-            <!--
-              HU-16: solo cuando la cita esta pendiente de cierre. El servidor
-              responde 409 a una que aun no ha terminado, asi que ofrecer el boton
-              antes seria mandar a pulsar algo que no puede funcionar.
-            -->
             @if (pendienteDeCierre(fila)) {
               <button
                 mat-icon-button
@@ -284,7 +265,11 @@ function aIso(fecha: Date): string {
       flex-wrap: wrap;
       gap: 1rem;
       align-items: flex-start;
-      margin-bottom: 1rem;
+      margin-bottom: 1.25rem;
+      padding: var(--space-5) var(--space-5) var(--space-2);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
     }
     .filtros mat-form-field {
       width: min(100%, 14rem);
@@ -292,9 +277,31 @@ function aIso(fecha: Date): string {
     .filtros button {
       margin-top: 0.5rem;
     }
+    .resumen {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      margin: 0 0 var(--space-4);
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .resumen strong {
+      color: var(--ink);
+    }
     table {
       width: 100%;
       min-width: 52rem;
+    }
+    .hora {
+      font: var(--text-time);
+      font-variant-numeric: tabular-nums;
+    }
+    .historia {
+      font: var(--text-code);
+    }
+    .valor {
+      min-width: 0;
     }
     .dia,
     .historia {
@@ -302,24 +309,18 @@ function aIso(fecha: Date): string {
       font-size: 0.8rem;
       opacity: 0.7;
     }
-    .estado.cancelada {
-      text-decoration: line-through;
-      opacity: 0.7;
-    }
     .col-acciones {
       width: 7rem;
       text-align: right;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
     .vacio {
       padding: 1.5rem 0;
       opacity: 0.7;
     }
 
-    /* RNF-09: a 360px la tabla sigue leyendose desplazandola en horizontal, y
-       los filtros pasan a una columna en vez de apretarse. */
     @media (max-width: 480px) {
       .filtros mat-form-field {
         width: 100%;
@@ -339,21 +340,34 @@ export class Agenda {
   private readonly snackBar = inject(MatSnackBar);
   private readonly fb = inject(FormBuilder);
 
-  /**
-   * El odontologo ve la misma pantalla, con el ambito fijado por el servidor a
-   * partir del token. Aqui solo se quita lo que para el no significa nada.
-   */
   protected readonly esOdontologo = this.auth.rol() === 'ODONTOLOGO';
 
-  /**
-   * Aqui los dias sin atencion se atenuan pero **se pueden marcar**: son los
-   * extremos de un rango, y consultar «del sabado al domingo» o hasta fin de mes
-   * es legitimo aunque esos dias no se atienda.
-   */
   protected readonly diasAbiertos = signal<CalendarioPublico | null>(null);
   protected readonly diasCerrados = computed(() => claseDeDias(this.diasAbiertos()));
 
   protected readonly estados = ESTADOS_CITA;
+
+  /** Cuántas citas de la página hay en cada estado; los estados vacíos no se muestran. */
+  protected readonly conteo = computed(() =>
+    ESTADOS_CITA.map((estado) => ({
+      estado,
+      n: this.citas().filter((cita) => cita.estado === estado).length,
+    })).filter((grupo) => grupo.n > 0),
+  );
+
+  protected etiquetaConteo(estado: EstadoCita, n: number): string {
+    const plural = n !== 1;
+    switch (estado) {
+      case 'CONFIRMADA':
+        return plural ? 'confirmadas' : 'confirmada';
+      case 'ATENDIDA':
+        return plural ? 'atendidas' : 'atendida';
+      case 'NO_ASISTIO':
+        return 'no asistió';
+      default:
+        return plural ? 'canceladas' : 'cancelada';
+    }
+  }
   protected readonly columnas = [
     'hora',
     'paciente',
@@ -380,8 +394,6 @@ export class Agenda {
       estado: ['' as EstadoCita | ''],
     },
     {
-      // El servidor tambien lo rechaza con un 400; comprobarlo aqui ahorra el
-      // viaje y explica el limite antes de pulsar.
       validators: (grupo) => {
         const desde = grupo.get('desde')?.value as Date | null;
         const hasta = grupo.get('hasta')?.value as Date | null;
@@ -394,8 +406,6 @@ export class Agenda {
   );
 
   constructor() {
-    // Sin desplegable no hay nada que llenar: traer el listado entero para no
-    // pintarlo seria una consulta por cada visita del odontologo a su agenda.
     if (!this.esOdontologo) {
       cargarTodasLasPaginas((pagina) =>
         this.odontologoService.listar({ page: pagina, size: 100 }),
@@ -407,7 +417,6 @@ export class Agenda {
 
     this.publicoService.calendario().subscribe({
       next: (dias) => this.diasAbiertos.set(dias),
-      // Sin el dato el calendario no atenua nada, que es como estaba antes.
       error: () => this.diasAbiertos.set(null),
     });
 
@@ -418,7 +427,32 @@ export class Agenda {
     return estado === 'NO_ASISTIO' ? 'No asistió' : estado.charAt(0) + estado.slice(1).toLowerCase();
   }
 
-  /** Consultar reinicia la paginacion: la pagina 3 de otra busqueda no significa nada. */
+  protected tonoEstado(estado: EstadoCita): 'info' | 'ok' | 'aviso' | 'error' {
+    switch (estado) {
+      case 'CONFIRMADA':
+        return 'info';
+      case 'ATENDIDA':
+        return 'ok';
+      case 'NO_ASISTIO':
+        return 'aviso';
+      default:
+        return 'error';
+    }
+  }
+
+  protected iconoEstado(estado: EstadoCita): string {
+    switch (estado) {
+      case 'CONFIRMADA':
+        return 'schedule';
+      case 'ATENDIDA':
+        return 'check_circle';
+      case 'NO_ASISTIO':
+        return 'warning';
+      default:
+        return 'cancel';
+    }
+  }
+
   protected consultar(): void {
     this.indice.set(0);
     this.cargar();
@@ -469,12 +503,6 @@ export class Agenda {
     this.dialogo.open(HistorialDialogo, { data: datos });
   }
 
-  /**
-   * HU-16: una cita esta pendiente de cierre cuando sigue CONFIRMADA y su hora
-   * de fin ya paso (RN-09). Se calcula aqui y no viene del servidor porque la
-   * agenda ya trae la fecha, la hora y la duracion, y el servidor tendria que
-   * fijar un «ahora» para toda la clinica en cada fila.
-   */
   protected pendienteDeCierre(cita: CitaResumen): boolean {
     if (cita.estado !== 'CONFIRMADA') {
       return false;
@@ -492,13 +520,11 @@ export class Agenda {
           return;
         }
         this.snackBar.open(avisoDeResultado(cerrada), 'Cerrar', { duration: 6000 });
-        // La fila cambio de estado y la agenda que hay delante ya no vale.
         this.cargar();
       });
   }
 
   protected cancelar(cita: CitaResumen): void {
-    // Recepcion atiende citas de terceros: de quien es tiene que verse.
     const datos: CancelarDialogoDatos = { cita, mostrarPaciente: true };
     this.dialogo
       .open(CancelarDialogo, { data: datos })
@@ -510,17 +536,11 @@ export class Agenda {
         this.snackBar.open(`Cita ${cita.codigo} cancelada. Su franja vuelve a ofrecerse.`, 'Cerrar', {
           duration: 6000,
         });
-        // La fila cambio de estado y la agenda que hay delante ya no vale.
         this.cargar();
       });
   }
 }
 
-/**
- * El instante en que termina la cita, en hora local. Se construye a partir de
- * las cadenas sin pasar por UTC: `new Date(cita.fecha)` interpretaria
- * "2026-09-14" como medianoche UTC y desplazaria el dia al huso del navegador.
- */
 function finLocal(cita: CitaResumen): number {
   const [a, m, d] = cita.fecha.split('-').map(Number);
   const [hh, mm] = cita.hora.split(':').map(Number);

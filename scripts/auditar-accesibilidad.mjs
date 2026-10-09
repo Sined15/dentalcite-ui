@@ -1,23 +1,3 @@
-/**
- * Auditoría de accesibilidad (RNF-08).
- *
- * RNF-08 exige cinco criterios AA de WCAG 2.1 sobre las pantallas del alcance:
- * contraste (1.4.3), texto alternativo (1.1.1), navegación por teclado (2.1.1),
- * foco visible (2.4.7) y etiquetado de formularios (3.3.2). Este guion cubre la
- * mitad automatizable de su instrumento de verificación; el recorrido manual
- * con teclado y lector de pantalla es la otra mitad y no se sustituye.
- *
- * Se ejecuta contra Chrome de verdad, no contra jsdom, porque el contraste
- * exige que el navegador calcule los estilos: en jsdom axe se salta esa regla,
- * que es justo uno de los cinco criterios que RNF-08 nombra.
- *
- * Requisitos: la API en :8080 y el cliente en :4200, ambos en marcha.
- *
- *   npm run a11y
- *
- * Sale con código 1 si hay alguna violación, de modo que sirve como puerta de
- * la Definición de Terminado y no solo como informe.
- */
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -28,7 +8,6 @@ const API = process.env.API_URL ?? 'http://localhost:8080';
 const UI = process.env.UI_URL ?? 'http://localhost:4200';
 const PUERTO_CDP = 9222;
 
-/** Las cuatro cuentas que Flyway siembra, todas con la misma contraseña. */
 const CUENTAS = {
   ADMINISTRADOR: 'admin@dentalcite.com',
   ODONTOLOGO: 'dr.perez@dentalcite.com',
@@ -37,14 +16,7 @@ const CUENTAS = {
 };
 const PASSWORD = 'Password123';
 
-/**
- * Pantallas del alcance construido, cada una con el rol que la alcanza. Las públicas van
- * sin rol: se visitan sin sesión, que es como las ve un visitante.
- */
 const PANTALLAS = [
-  // HU-06 (v4): el área pública. Van sin rol a propósito: se auditan como las ve
-  // un visitante, sin sesión, que es el único estado en que su cabecera ofrece
-  // iniciar sesión. Auditarlas con token mostraría otra cabecera y otra cosa.
   [null, '/'],
   [null, '/nuestras-especialidades'],
   [null, '/nuestro-equipo'],
@@ -62,37 +34,19 @@ const PANTALLAS = [
   ['ADMINISTRADOR', '/bloqueos'],
   ['ADMINISTRADOR', '/bloqueos/nuevo'],
   ['ODONTOLOGO', '/bloqueos'],
-  // Sprint 2
   ['ADMINISTRADOR', '/disponibilidad'],
   ['PACIENTE', '/disponibilidad'],
   ['RECEPCIONISTA', '/citas'],
-  // Sprint 3
   ['RECEPCIONISTA', '/pacientes'],
   ['RECEPCIONISTA', '/pacientes/nuevo'],
-  // HU-14: la misma ruta que ve el paciente, pero con el selector de paciente
-  // delante, que es un control mas —un combobox— y no se audita solo.
   ['RECEPCIONISTA', '/disponibilidad'],
   ['PACIENTE', '/mis-citas'],
   ['ODONTOLOGO', '/citas/pendientes'],
   ['RECEPCIONISTA', '/citas/pendientes'],
-  // El menu del paciente. Aqui estaba `['PACIENTE', '/tratamientos']`, que desde
-  // la revision v4 no audita lo que dice: esa ruta es el mantenimiento del
-  // catalogo y el paciente acaba en /sin-permiso. Sus tratamientos son estos.
   ['PACIENTE', '/mis-tratamientos'],
   ['PACIENTE', '/mis-citas/historial'],
 ];
 
-/**
- * La ficha de HU-13 necesita un identificador concreto, asi que su ruta no se
- * puede escribir en la lista de arriba: se resuelve buscando un paciente con la
- * propia API antes de auditar.
- *
- * Se devuelven dos pantallas sobre la misma ruta porque no ensenan lo mismo: la
- * seccion de planes de HU-17 solo se pinta para quien puede planificar, asi que
- * auditar unicamente la vista de recepcion la dejaria sin mirar. El
- * ADMINISTRADOR alcanza cualquier ficha y ademas planifica; el ODONTOLOGO solo
- * las de sus pacientes, y cual sea depende de los datos.
- */
 async function pantallasDeFicha(tokenDeRecepcion) {
   const r = await fetch(`${API}/api/v1/pacientes?size=1`, {
     headers: { Authorization: `Bearer ${tokenDeRecepcion}` },
@@ -107,23 +61,15 @@ async function pantallasDeFicha(tokenDeRecepcion) {
   ];
 }
 
-/**
- * El detalle de especialidad de HU-06 también lleva identificador, así que se
- * resuelve igual que la ficha. Se pide al **catálogo público**, sin token: si
- * hiciera falta una sesión para averiguar qué auditar, la pantalla no sería
- * pública.
- */
 async function pantallaDeEspecialidad() {
   const r = await fetch(`${API}/api/v1/publico/especialidades`);
   if (!r.ok) return [];
   const especialidades = await r.json();
-  // La que más contenido pinta es la que más superficie da que auditar.
   const conOdontologos = especialidades.find((e) => e.nombre === 'Odontología Estética');
   const elegida = conOdontologos ?? especialidades[0];
   return elegida ? [[null, `/nuestras-especialidades/${elegida.id}`]] : [];
 }
 
-/** RNF-09 fija 360px como ancho mínimo; se audita ahí y en escritorio. */
 const ANCHOS = [
   [360, 800, 'móvil'],
   [1440, 900, 'escritorio'],
@@ -144,7 +90,6 @@ function rutaDeChrome() {
       readFileSync(c);
       return c;
     } catch {
-      /* siguiente candidata */
     }
   }
   throw new Error('No se encontró Chrome. Indica su ruta en CHROME_PATH.');
@@ -251,8 +196,6 @@ try {
     );
 
     for (const [rol, ruta] of PANTALLAS) {
-      // La sesión se siembra desde una pantalla del propio origen, para que
-      // `localStorage` sea el del cliente y no el de `about:blank`.
       await enviar('Page.navigate', { url: `${UI}/login` }, sessionId);
       await espera(900);
       await ev(

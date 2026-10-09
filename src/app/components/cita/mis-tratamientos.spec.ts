@@ -16,7 +16,6 @@ const API_PERFIL = `${environment.apiUrl}/api/v1/usuarios/me`;
 const API_PLANES = `${environment.apiUrl}/api/v1/planes`;
 const FICHA = 'fic-1';
 
-/** Un plan con su primera sesión ya cerrada: la que trae lo que le indicaron. */
 const PLAN: Plan = {
   id: 'plan-1',
   paciente: { id: FICHA, nombre: 'Ramos, Julio' },
@@ -73,7 +72,6 @@ describe('MisTratamientos', () => {
     fixture = TestBed.createComponent(MisTratamientos);
   }
 
-  /** La ficha sale de la propia cuenta: el token no la lleva. */
   function resolverPlanes(planes: Plan[]): void {
     httpMock.expectOne(API_PERFIL).flush({ id: 'usu-1', rol: 'PACIENTE', fichaId: FICHA });
     const req = httpMock.expectOne((r) => r.url === API_PLANES);
@@ -92,8 +90,6 @@ describe('MisTratamientos', () => {
   beforeEach(() => TestBed.resetTestingModule());
 
   it('pide al servidor solo las citas ATENDIDA', async () => {
-    // Recibido es lo que ya ocurrio: una cita futura o cancelada no es un
-    // tratamiento que le hayan hecho a nadie.
     levantar();
 
     const req = httpMock.expectOne((r) => r.url === API);
@@ -149,9 +145,6 @@ describe('MisTratamientos', () => {
     );
   });
 
-  // ------------------------------------------------------------------
-  // El avance de sus planes
-  // ------------------------------------------------------------------
 
   it('muestra el avance que cuenta el servidor y el ultimo proximo control', async () => {
     await montar([], [PLAN]);
@@ -163,7 +156,6 @@ describe('MisTratamientos', () => {
   });
 
   it('lee la cifra del servidor y no la cuenta sobre las sesiones', async () => {
-    // Si el cliente contara, dos fórmulas darían dos cifras el día que difieran.
     await montar([], [{ ...PLAN, avance: { completadas: 2, pendientes: 1 } }]);
 
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
@@ -196,7 +188,6 @@ describe('MisTratamientos', () => {
   });
 
   it('si los planes fallan, los tratamientos recibidos siguen legibles', async () => {
-    // Son dos consultas distintas: que una se caiga no puede vaciar la pantalla.
     levantar();
     httpMock
       .expectOne((r) => r.url === API)

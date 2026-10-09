@@ -51,20 +51,22 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
     MatProgressBarModule,
     MatSelectModule,
   ],
-  // El adaptador nativo toma el locale de la aplicacion (es-PE), asi que el
-  // calendario empieza la semana en lunes y escribe las fechas como aqui se leen.
   providers: [provideNativeDateAdapter()],
   template: `
-    <h1>Franjas disponibles</h1>
+    <header class="encabezado">
+      <h1>Pedir cita</h1>
+      <p class="sub">
+        Elige un tratamiento y mira qué horas hay libres.
+        @if (visitante()) {
+          Puedes consultar sin cuenta; la necesitarás al reservar.
+        }
+      </p>
+    </header>
 
-    <mat-card class="tarjeta">
+    <div class="disposicion">
+    <mat-card class="tarjeta" appearance="outlined">
       <mat-card-content>
         <form [formGroup]="formulario" (ngSubmit)="consultar()">
-          <!--
-            HU-14 · RF-17: recepcion reserva en nombre de un paciente, asi que lo
-            primero es decir de quien es la cita. El PACIENTE no ve este campo:
-            reserva para si mismo y su ficha sale del token.
-          -->
           @if (reservaParaOtro()) {
             <mat-form-field appearance="outline">
               <mat-label>Paciente</mat-label>
@@ -103,17 +105,19 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
                 </mat-option>
               }
             </mat-select>
-            <mat-hint>La duración de la cita es la del tratamiento.</mat-hint>
             @if (formulario.controls.tratamientoId.hasError('required')) {
               <mat-error>Debes elegir un tratamiento</mat-error>
             }
           </mat-form-field>
+          <p class="duracion">
+            <mat-icon aria-hidden="true">schedule</mat-icon>
+            @if (duracionElegida(); as minutos) {
+              {{ minutos }} minutos por sesión
+            } @else {
+              La duración de la cita es la del tratamiento.
+            }
+          </p>
 
-          <!--
-            RN-08: solo se ofrecen los odontologos que poseen la especialidad que
-            el tratamiento exige. El servidor lo aplica igualmente; filtrar aqui
-            evita ofrecer una eleccion que devolveria una agenda vacia.
-          -->
           <mat-form-field appearance="outline">
             <mat-label>Odontólogo</mat-label>
             <mat-select formControlName="odontologoId">
@@ -129,17 +133,8 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
             }
           </mat-form-field>
 
-          <!--
-            Un dia, elegido en el calendario. El campo es de solo lectura y abre
-            el mes al pulsarlo: escribir la fecha a mano era la via de todos los
-            errores que habia que explicar despues —el dia inexistente, el formato
-            del pais, el rango al reves—, y ninguno puede darse marcando en el mes.
-
-            Los limites acotan ahi mismo la ventana de RNF-01: lo que el motor no
-            puede responder sale apagado y no se puede pulsar.
-          -->
-          <mat-form-field appearance="outline" class="dia">
-            <mat-label>Dia en el que quieres venir</mat-label>
+          <mat-form-field appearance="outline">
+            <mat-label>Día en el que quieres venir</mat-label>
             <input
               matInput
               readonly
@@ -153,25 +148,30 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
             <mat-datepicker-toggle matIconSuffix [for]="calendario" />
             <mat-datepicker #calendario />
             @if (formulario.controls.dia.hasError('required')) {
-              <mat-error>Marca el dia en el calendario</mat-error>
+              <mat-error>Marca el día en el calendario</mat-error>
             }
           </mat-form-field>
 
           <p class="nota">
-            Las citas se reservan con al menos dos horas de antelación, así que las franjas más
-            inmediatas no aparecen.
+            <mat-icon aria-hidden="true">info</mat-icon>
+            <span>
+              Las citas se reservan con al menos dos horas de antelación, así que las franjas más
+              inmediatas no aparecen.
+            </span>
           </p>
           @if (visitante()) {
             <p class="nota">
-              Puedes consultar sin cuenta. Para reservar la franja que elijas te pediremos iniciar
-              sesión o registrarte, y volverás a ella sin repetir la búsqueda.
+              <mat-icon aria-hidden="true">info</mat-icon>
+              <span>
+                Puedes consultar sin cuenta. Para reservar la franja que elijas te pediremos
+                iniciar sesión o registrarte, y volverás a ella sin repetir la búsqueda.
+              </span>
             </p>
           }
 
           <div class="acciones">
             <button
               mat-flat-button
-              color="primary"
               type="submit"
               [disabled]="formulario.invalid || cargando()"
             >
@@ -183,6 +183,7 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
       </mat-card-content>
     </mat-card>
 
+    <div class="derecha">
     @if (cargando()) {
       <mat-progress-bar mode="indeterminate" aria-label="Buscando franjas disponibles" />
     }
@@ -191,11 +192,6 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <!--
-      El codigo se ve al confirmar, pero cerrar el dialogo no debe destruirlo: el
-      listado de citas propias es HU-15 y hasta entonces no hay donde volver a
-      consultarlo.
-    -->
     @if (ultimaReserva(); as cita) {
       <div class="reservada" role="status">
         <mat-icon aria-hidden="true">event_available</mat-icon>
@@ -211,13 +207,6 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
 
     @if (consultado() && !cargando() && !error()) {
       <section class="resultados">
-        <!--
-          El motor propone cada quince minutos y aqui se agrupan de treinta en
-          treinta para no fragmentar la eleccion. El paso no se ofrece como
-          opcion: agrupar no descarta ninguna hora, porque el dialogo de reserva
-          conserva los inicios exactos del bloque, de modo que elegir la
-          granularidad solo obligaba a decidir algo que no cambia lo reservable.
-        -->
         <div class="resumen">
           <p role="status">{{ resumen() }}</p>
         </div>
@@ -225,17 +214,12 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
         @for (dia of dias(); track dia.fecha) {
           <section class="dia">
             <h2>{{ dia.fecha | date: "EEEE d 'de' MMMM" }}</h2>
+            <p class="cuenta">
+              {{ dia.bloques.length }} {{ dia.bloques.length === 1 ? 'franja' : 'franjas' }}
+            </p>
             <ul class="franjas">
               @for (bloque of dia.bloques; track bloque.inicio) {
                 <li>
-                  <!--
-                    Reservan el paciente para si mismo (HU-09) y recepcion o
-                    administracion en nombre de un paciente ya elegido (HU-14).
-                    Mientras no se haya elegido a quien, la franja es solo
-                    informacion: un boton que devolviera 400 al pulsarlo seria un
-                    fallo de diseno. Para el visitante tambien es un boton: pulsarlo
-                    le pide identificarse y le devuelve a esta misma franja.
-                  -->
                   @if (puedeReservar()) {
                     <button
                       type="button"
@@ -260,124 +244,204 @@ import { ReservarDialogo, ReservarDialogoDatos, ReservarResultado } from './rese
           </section>
         } @empty {
           <p class="vacio">
+            <mat-icon aria-hidden="true">event_busy</mat-icon>
             No hay franjas disponibles para ese tratamiento en el rango elegido. Prueba con otras
             fechas o con otro odontólogo.
           </p>
         }
       </section>
     }
+    </div>
+    </div>
   `,
   styles: `
+    .encabezado {
+      margin-bottom: var(--space-6);
+    }
     h1 {
-      font-size: 1.5rem;
-      margin: 0 0 1rem;
+      font: var(--text-display-md);
+      letter-spacing: -0.015em;
+      margin: 0;
+    }
+    .sub {
+      margin: var(--space-2) 0 0;
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
+    }
+    .disposicion {
+      display: grid;
+      grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+      gap: var(--space-8);
+      align-items: start;
     }
     .tarjeta {
-      max-width: 40rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: none;
     }
     form {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: var(--space-1);
     }
-    .fila {
+    .duracion {
       display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-1);
+      margin: 0 0 var(--space-3);
+      font: var(--text-label);
+      color: var(--ink-muted);
     }
-    .fila mat-form-field {
-      flex: 1 1 12rem;
+    .duracion mat-icon {
+      width: 1rem;
+      height: 1rem;
+      font-size: 1rem;
     }
     .nota {
-      font-size: 0.875rem;
-      opacity: 0.75;
-      margin: 0.5rem 0 0;
+      display: flex;
+      gap: var(--space-3);
+      align-items: flex-start;
+      margin: var(--space-2) 0 0;
+      padding: var(--space-3) var(--space-4);
+      background: var(--accent-soft);
+      border-radius: var(--radius-md);
+      font: var(--text-body-sm);
+    }
+    .nota mat-icon {
+      flex: none;
+      color: var(--accent-ink);
     }
     .acciones {
       display: flex;
-      justify-content: flex-end;
-      margin-top: 1rem;
+      margin-top: var(--space-4);
+    }
+    .acciones button {
+      width: 100%;
+    }
+    .derecha {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      min-width: 0;
     }
     .resultados {
-      margin-top: 1.5rem;
-    }
-    .resumen {
-      margin-bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-8);
+      padding: var(--space-6);
+      background: var(--surface-sunken);
+      border-radius: var(--radius-lg);
     }
     .resumen p {
       margin: 0;
-    }
-    .dia {
-      margin-bottom: 1.5rem;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
     .dia h2 {
-      font-size: 1.125rem;
-      margin: 0 0 0.5rem;
+      font: var(--text-title-md);
+      margin: 0;
     }
-    /* es-PE escribe el dia de la semana en minuscula; capitalizar la frase
-       entera daria «Lunes 14 De Septiembre». */
     .dia h2::first-letter {
       text-transform: uppercase;
     }
+    .cuenta {
+      margin: 2px 0 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
     .franjas {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-      gap: 0.5rem;
+      grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+      gap: var(--space-3);
       list-style: none;
-      margin: 0;
+      margin: var(--space-4) 0 0;
       padding: 0;
     }
     .franja {
-      border: 1px solid var(--mat-sys-outline-variant, #c8c6ca);
-      border-radius: 0.5rem;
-      padding: 0.5rem 0.75rem;
       display: flex;
       flex-direction: column;
-      gap: 0.125rem;
+      align-items: flex-start;
+      gap: 2px;
       width: 100%;
+      min-height: 3.5rem;
+      padding: var(--space-3) var(--space-4);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--surface);
       text-align: left;
     }
     .pulsable {
-      background: var(--mat-sys-surface, #fff);
-      color: inherit;
+      color: var(--ink);
       font: inherit;
       cursor: pointer;
     }
     .pulsable:hover {
-      background: var(--mat-sys-surface-container-high, #ececee);
+      border-color: var(--brand);
+      background: var(--brand-soft);
     }
     .reservada {
       display: flex;
       align-items: flex-start;
-      gap: 0.75rem;
-      margin-top: 1.5rem;
-      padding: 0.75rem 1rem;
-      border-radius: 0.5rem;
-      background: var(--mat-sys-surface-container-highest, #e2e2e6);
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
     }
     .reservada div {
       display: flex;
       flex-direction: column;
     }
     .reservada span {
-      font-size: 0.875rem;
-      opacity: 0.8;
+      font: var(--text-body-sm);
     }
     .hora {
-      font-weight: 600;
+      font: var(--text-time);
       font-variant-numeric: tabular-nums;
     }
     .quien {
-      font-size: 0.8125rem;
-      opacity: 0.75;
+      font: 400 0.75rem/1rem var(--font-sans);
+      color: var(--ink-muted);
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
-      font-size: 0.875rem;
+      color: var(--danger-ink);
+      font: var(--text-body-sm);
     }
     .vacio {
-      padding: 1.5rem 0;
-      opacity: 0.7;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-2);
+      margin: 0;
+      padding: var(--space-5);
+      background: var(--surface);
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-md);
+      color: var(--ink-muted);
+    }
+    .vacio mat-icon {
+      width: 1.75rem;
+      height: 1.75rem;
+      font-size: 1.75rem;
+      color: var(--ink-faint);
+    }
+    @media (max-width: 60rem) {
+      .disposicion {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-6);
+      }
+    }
+    @media (max-width: 40rem) {
+      h1 {
+        font-size: 1.75rem;
+        line-height: 1.18;
+      }
+      .resultados {
+        padding: var(--space-4);
+      }
+      .franjas {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
   `,
 })
@@ -392,48 +456,26 @@ export class Disponibilidad {
   private readonly ruta = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  /**
-   * Quien consulta sin haber iniciado sesion. Ve las mismas franjas que un
-   * paciente, y al pulsar una se le pide identificarse en vez de reservar.
-   */
   protected readonly visitante = computed(() => !this.auth.estaAutenticado());
 
-  /**
-   * La hora que se eligio antes de identificarse, pendiente de reabrirse cuando
-   * llegue la respuesta de la consulta restaurada desde la URL.
-   */
   private franjaPendiente: string | null = null;
 
-  /**
-   * HU-14 · RF-17: recepción y administración reservan en nombre de otro, así que
-   * tienen que elegir antes de quién es la cita. El paciente no: reserva para sí
-   * mismo (HU-09).
-   */
   protected readonly reservaParaOtro = computed(() => {
     const rol = this.auth.rol();
     return rol === 'RECEPCIONISTA' || rol === 'ADMINISTRADOR';
   });
 
-  /** Resultados de la búsqueda de pacientes, y el que se ha elegido. */
   protected readonly pacientes = signal<Paciente[]>([]);
   protected readonly pacienteElegido = signal<Paciente | null>(null);
 
-  /**
-   * RF-15: reservar es del paciente para sí mismo o de recepción para alguien.
-   * Recepción sin paciente elegido no reserva: el botón daría un 400 al pulsarlo.
-   */
   protected readonly puedeReservar = computed(() => {
     if (this.visitante() || this.auth.rol() === 'PACIENTE') {
       return true;
     }
     return this.reservaParaOtro() && this.pacienteElegido() !== null;
   });
-  /** La última reserva de esta sesión, para que su código siga a la vista. */
   protected readonly ultimaReserva = signal<Cita | null>(null);
 
-  // Del catalogo publico, con o sin sesion: el visitante no tiene credencial que
-  // mandar a las rutas del catalogo autenticado, y tener dos fuentes seria tener
-  // dos listas que podrian no coincidir. El publico ya solo trae lo activo.
   protected readonly tratamientos = signal<TratamientoPublico[]>([]);
   protected readonly odontologos = signal<OdontologoPublico[]>([]);
   protected readonly respuesta = signal<DisponibilidadResponse | null>(null);
@@ -441,35 +483,16 @@ export class Disponibilidad {
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /**
-   * La ventana que el motor puede responder (RNF-01), llevada al calendario: hoy
-   * y los trece dias siguientes. Fuera de ahi los dias salen apagados, que dice
-   * lo mismo que el aviso de «rango demasiado largo» pero antes de intentarlo.
-   */
   protected readonly minimoConsultable = hoy();
   protected readonly maximoConsultable = sumarDias(hoy(), DIAS_MAXIMOS - 1);
 
   protected readonly formulario = this.fb.nonNullable.group({
-    // Guarda el objeto elegido, no una cadena: el autocompletado necesita el
-    // paciente entero para pintarlo y para mandar su identificador.
     paciente: [null as Paciente | string | null],
     tratamientoId: ['', [Validators.required]],
     odontologoId: [''],
-    // Fecha y no cadena: es lo que maneja el calendario de Material. A la API
-    // sigue viajando como "YYYY-MM-DD", que la convierte `consultar`.
-    //
-    // Un dia y no un rango: el paciente viene un dia concreto, y preguntar por
-    // dos semanas para luego recorrer la respuesta buscando el suyo era hacerle
-    // pagar por franjas que no habia pedido. La API sigue siendo de rango —se le
-    // manda el mismo dia en los dos extremos—, asi que el motor no cambia.
     dia: [this.minimoConsultable as Date | null, [Validators.required]],
   });
 
-  /**
-   * Los dias en que se atiende. Se pide una vez: no cambia mientras la pantalla
-   * este abierta, y el calendario se estrecha al elegir odontologo sin volver a
-   * preguntar.
-   */
   protected readonly diasAbiertos = signal<CalendarioPublico | null>(null);
 
   protected readonly odontologoElegido = toSignal(
@@ -477,11 +500,6 @@ export class Disponibilidad {
     { initialValue: '' },
   );
 
-  /**
-   * El domingo y los feriados salen apagados, y con un odontologo elegido tambien
-   * los dias que esa persona no atiende. Antes se podian marcar y la respuesta
-   * llegaba vacia, que no dice si es que no queda hueco o que ese dia no se abre.
-   */
   protected readonly soloDiasConAtencion = computed(() =>
     filtroDeDias(this.diasAbiertos(), this.odontologoElegido() || null),
   );
@@ -491,7 +509,6 @@ export class Disponibilidad {
     { initialValue: '' },
   );
 
-  /** RN-08: los que poseen la especialidad que el tratamiento elegido exige. */
   protected readonly odontologosAptos = computed<OdontologoPublico[]>(() => {
     const tratamiento = this.tratamientos().find((t) => t.id === this.tratamientoElegido());
     if (!tratamiento) {
@@ -501,6 +518,10 @@ export class Disponibilidad {
       o.especialidadIds.includes(tratamiento.especialidadId),
     );
   });
+
+  protected readonly duracionElegida = computed(
+    () => this.tratamientos().find((t) => t.id === this.tratamientoElegido())?.duracionMinutos ?? null,
+  );
 
   protected readonly dias = computed(() => agruparFranjas(this.respuesta()));
 
@@ -516,9 +537,6 @@ export class Disponibilidad {
   });
 
   constructor() {
-    // Los dos catalogos llegan juntos porque la busqueda restaurada desde la URL
-    // necesita ambos: con el tratamiento y sin los odontologos, nadie seria apto
-    // todavia y el efecto de mas abajo soltaria al odontologo que se venia a ver.
     forkJoin({
       tratamientos: this.publicoService.tratamientos(),
       odontologos: this.publicoService.odontologos(),
@@ -533,15 +551,9 @@ export class Disponibilidad {
 
     this.publicoService.calendario().subscribe({
       next: (dias) => this.diasAbiertos.set(dias),
-      // Sin este dato el calendario no apaga nada y se comporta como antes. No
-      // es un error que merezca ocupar el aviso de la pantalla: quien marque un
-      // dia cerrado recibira la lista vacia de siempre.
       error: () => this.diasAbiertos.set(null),
     });
 
-    // Un dia que deja de estar abierto —porque llego el calendario, o porque se
-    // eligio un odontologo que no atiende ese dia— se limpia en vez de quedarse
-    // marcado: el campo seguiria mostrandolo aunque el calendario ya lo apague.
     effect(() => {
       const dias = this.diasAbiertos();
       const odontologo = this.odontologoElegido();
@@ -551,15 +563,6 @@ export class Disponibilidad {
       }
     });
 
-    // Cambiar de tratamiento puede dejar al odontologo elegido sin la
-    // especialidad requerida: mantenerlo seleccionado pediria al servidor una
-    // agenda que RN-08 vaciaria, sin que se viera por que.
-    //
-    // La lista se lee la primera y fuera de toda condicion. Leerla dentro del
-    // `if` la dejaba tras un cortocircuito: con el valor inicial vacio no se
-    // llegaba a leer, el efecto no registraba ninguna dependencia de senal y no
-    // volvia a ejecutarse nunca. El valor del control no es una senal y no
-    // dispara nada por si mismo.
     effect(() => {
       const aptos = this.odontologosAptos();
       const elegido = this.formulario.controls.odontologoId.value;
@@ -574,23 +577,9 @@ export class Disponibilidad {
     }
   }
 
-  /**
-   * HU-13 · RF-07 reutilizado: el mismo endpoint de búsqueda del listado de
-   * pacientes, con el mismo término único para documento, apellidos y número de
-   * historia.
-   *
-   * <p>El `debounceTime` no es cosmética: sin él, cada tecla sería una consulta
-   * paginada contra la base, que es justo lo que RNF-02 mide. El
-   * `distinctUntilChanged` evita repetir la consulta cuando el valor no cambia,
-   * y `switchMap` descarta la respuesta de una búsqueda que ya no interesa —sin
-   * él, una respuesta lenta podría pisar a la de la siguiente letra.
-   */
   private prepararBusquedaDePacientes(): void {
     this.formulario.controls.paciente.valueChanges
       .pipe(
-        // Volver a escribir deshace la elección, y **antes** del retardo: si
-        // esperase al `debounceTime`, entre la primera tecla y la consulta el
-        // botón seguiría ofreciendo reservar para quien ya no está escrito.
         tap((valor) => {
           if (typeof valor === 'string') {
             this.pacienteElegido.set(null);
@@ -599,8 +588,6 @@ export class Disponibilidad {
         debounceTime(300),
         distinctUntilChanged(),
         switchMap((valor) => {
-          // Al elegir una opción, el control pasa a contener el objeto: eso no es
-          // un término de búsqueda y no debe disparar otra consulta.
           const termino = typeof valor === 'string' ? valor.trim() : '';
           if (termino.length < 2) {
             this.pacientes.set([]);
@@ -608,8 +595,6 @@ export class Disponibilidad {
           }
           return this.pacienteService.buscar(termino, { size: 10 });
         }),
-        // `valueChanges` no termina nunca: sin esto la suscripción sobreviviría a
-        // la pantalla.
         takeUntilDestroyed(),
       )
       .subscribe({
@@ -618,28 +603,6 @@ export class Disponibilidad {
       });
   }
 
-  /**
-   * Se llega aquí desde la ficha del paciente con `?pacienteId=…`, que es el
-   * camino natural: primero se le busca (HU-13) y desde su ficha se reserva.
-   */
-  /**
-   * Se llega aqui desde el detalle de una especialidad (HU-06) con
-   * `?tratamientoId=...`, igual que desde la ficha se llega con `?pacienteId=`.
-   *
-   * La diferencia con el paciente es que el tratamiento no necesita peticion
-   * propia: ya viene en el catalogo que acaba de llegar. Por eso se precarga
-   * dentro de esa misma respuesta y no en el constructor: fijar el valor antes
-   * dejaria al desplegable con un identificador sin etiqueta que mostrar.
-   *
-   * Se ignora en silencio el que no este entre los activos —un tratamiento dado
-   * de baja entre que se genero el enlace y se pulso—: la pantalla queda como si
-   * nadie hubiera elegido nada, que es exactamente donde puede seguir.
-   *
-   * Tambien se vuelve aqui despues de identificarse, y entonces la URL trae la
-   * busqueda entera —odontologo, dia y la hora elegida—: se rehace la consulta
-   * sola y, al llegar, se reabre esa franja. Es lo que evita al visitante repetir
-   * la busqueda que ya hizo antes de tener cuenta.
-   */
   private restaurarBusquedaDeLaUrl(
     tratamientos: TratamientoPublico[],
     odontologos: OdontologoPublico[],
@@ -665,14 +628,6 @@ export class Disponibilidad {
     this.consultar();
   }
 
-  /**
-   * La franja que se eligio antes de identificarse, si la consulta restaurada
-   * la sigue ofreciendo. Solo se reabre para quien reserva para si mismo:
-   * recepcion tendria que elegir antes al paciente, y el dialogo sin el daria 400.
-   *
-   * La hora se quita despues de la URL para que recargar la pantalla no vuelva a
-   * abrir el dialogo que ya se cerro.
-   */
   private reabrirFranjaPendiente(): void {
     const inicio = this.franjaPendiente;
     this.franjaPendiente = null;
@@ -713,7 +668,6 @@ export class Disponibilidad {
     });
   }
 
-  /** Cómo se escribe el paciente elegido dentro del campo. */
   protected mostrarPaciente(paciente: Paciente | string | null): string {
     if (!paciente || typeof paciente === 'string') {
       return typeof paciente === 'string' ? paciente : '';
@@ -730,8 +684,6 @@ export class Disponibilidad {
       return;
     }
     const valores = this.formulario.getRawValue();
-    // `required` ya lo garantiza y el formulario invalido no llega hasta aqui;
-    // esto solo se lo dice al compilador, que no conoce esa regla.
     if (!valores.dia) {
       return;
     }
@@ -744,8 +696,6 @@ export class Disponibilidad {
       .consultar({
         tratamientoId: valores.tratamientoId,
         odontologoId: valores.odontologoId || undefined,
-        // El endpoint es de rango y el dia elegido va en los dos extremos: es
-        // un rango de un solo dia, y asi el motor no necesita otro contrato.
         desde: dia,
         hasta: dia,
       })
@@ -766,10 +716,6 @@ export class Disponibilidad {
       });
   }
 
-  /**
-   * Abre la confirmación y, si acaba en reserva, deja el código a la vista y
-   * repite la consulta: la franja que se acaba de tomar ya no debe ofrecerse.
-   */
   protected abrirReserva(dia: DiaAgrupado, bloque: BloqueAgrupado): void {
     const tratamiento = this.tratamientos().find((t) => t.id === this.tratamientoElegido());
     if (!tratamiento) {
@@ -788,8 +734,6 @@ export class Disponibilidad {
       duracionMinutos: tratamiento.duracionMinutos,
       fecha: dia.fecha,
       bloque,
-      // Solo cuando reserva recepción: si lo mandara un PACIENTE, el servidor
-      // respondería 403 aunque fuese su propia ficha.
       paciente:
         this.reservaParaOtro() && paciente
           ? {
@@ -815,8 +759,6 @@ export class Disponibilidad {
           return;
         }
 
-        // RF-16: la franja se ocupó mientras confirmaba, o la cuota se agotó. Se
-        // informa y se recalcula, porque la lista que tiene delante ya no vale.
         if (resultado.recargar) {
           this.snackBar.open(resultado.recargar, 'Cerrar', { duration: 8000 });
           this.consultar();
@@ -824,11 +766,6 @@ export class Disponibilidad {
       });
   }
 
-  /**
-   * Sin cuenta no se reserva, pero la eleccion no se pierde: la busqueda entera
-   * y la hora viajan en el `returnUrl`, y el login —directo o despues del
-   * registro— devuelve aqui con ellas.
-   */
   private pedirIdentificacion(dia: DiaAgrupado, bloque: BloqueAgrupado): void {
     const valores = this.formulario.getRawValue();
     const returnUrl = this.router
@@ -841,16 +778,25 @@ export class Disponibilidad {
         },
       })
       .toString();
-    const datos: IdentificarseDialogoDatos = { returnUrl };
+    const tratamiento = this.tratamientos().find((t) => t.id === valores.tratamientoId);
+    const datos: IdentificarseDialogoDatos = {
+      returnUrl,
+      franja: tratamiento
+        ? {
+            tratamiento: tratamiento.nombre,
+            fecha: dia.fecha,
+            hora: bloque.inicio,
+            odontologo: this.etiqueta(bloque),
+          }
+        : undefined,
+    };
     this.dialogo.open(IdentificarseDialogo, { data: datos });
   }
 
-  /** El botón necesita decir a dónde lleva, no solo la hora. */
   protected etiquetaAccesible(dia: DiaAgrupado, bloque: BloqueAgrupado): string {
     return `Reservar el ${dia.fecha} a las ${bloque.inicio} con ${this.nombres(bloque)}`;
   }
 
-  /** Con varios odontologos libres, el recuento; con uno, su nombre. */
   protected etiqueta(bloque: BloqueAgrupado): string {
     if (bloque.odontologos.length === 1) {
       return bloque.odontologos[0].nombre;
@@ -863,8 +809,6 @@ export class Disponibilidad {
   }
 }
 
-/** Fecha local de hoy como "YYYY-MM-DD", sin pasar por UTC. */
-/** Hoy a medianoche local: el calendario compara dias, no instantes. */
 function hoy(): Date {
   const ahora = new Date();
   return new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
@@ -874,23 +818,12 @@ function sumarDias(fecha: Date, dias: number): Date {
   return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + dias);
 }
 
-/**
- * La fecha como la espera la API: dia local en "YYYY-MM-DD".
- *
- * No sirve `toISOString()`: pasa por UTC, y en Lima una fecha a medianoche
- * retrocederia al dia anterior.
- */
 function aIso(fecha: Date): string {
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   const dia = String(fecha.getDate()).padStart(2, '0');
   return `${fecha.getFullYear()}-${mes}-${dia}`;
 }
 
-/**
- * El camino inverso, para el dia que llega en la URL: medianoche local, por la
- * misma razon que `aIso` no pasa por UTC. Lo que no sea una fecha real queda en
- * `null`, y la pantalla lo ignora como si no se hubiera indicado.
- */
 function deIso(texto: string | null): Date | null {
   const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto ?? '');
   if (!partes) {

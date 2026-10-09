@@ -2,14 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { DisponibilidadResponse } from '../../models';
 import { agruparFranjas } from './agrupar-franjas';
 
-/**
- * Criterio de aceptación del portal en HU-08: «Dadas las franjas propuestas,
- * cuando se muestren en el portal, entonces la interfaz las agrupará en pasos de
- * treinta minutos para no fragmentar la elección» (RN-04).
- *
- * El motor propone cada quince minutos; agrupar es trabajo de esta capa, y estas
- * pruebas fijan que agrupar no pierde ninguna franja.
- */
 function respuesta(odontologos: DisponibilidadResponse['odontologos']): DisponibilidadResponse {
   return {
     tratamientoId: 'tra-1',
@@ -44,12 +36,10 @@ describe('agruparFranjas', () => {
 
     const lunes = dias[0];
     expect(lunes.fecha).toBe('2026-09-14');
-    // 09:00 y 09:15 caen en el mismo bloque; 09:30 y 10:30 abren el suyo.
     expect(lunes.bloques.map((b) => b.inicio)).toEqual(['09:00', '09:30', '10:30']);
   });
 
   it('agrupar no descarta: cada bloque conserva los inicios exactos que contiene', () => {
-    // Es lo que permitira a HU-09 reservar el minuto real y no el del bloque.
     const dias = agruparFranjas(respuesta([PEREZ]), 30);
 
     expect(dias[0].bloques[0].inicios).toEqual(['09:00', '09:15']);
@@ -69,13 +59,10 @@ describe('agruparFranjas', () => {
   });
 
   it('reúne en un mismo bloque a los odontólogos que lo ofrecen', () => {
-    // «Cualquier odontólogo»: dos agendas distintas con hueco a la misma hora
-    // son una sola franja para el paciente.
     const dias = agruparFranjas(respuesta([PEREZ, RUIZ]), 30);
 
     const nueve = dias[0].bloques.find((b) => b.inicio === '09:00');
     expect(nueve?.odontologos.map((o) => o.nombre)).toEqual(['Ana Ruiz', 'Juan Pérez']);
-    // Perez ofrece 09:00 y 09:15; Ruiz solo 09:15.
     expect(nueve?.odontologos.find((o) => o.id === 'odo-2')?.inicios).toEqual(['09:15']);
     expect(nueve?.inicios).toEqual(['09:00', '09:15']);
   });

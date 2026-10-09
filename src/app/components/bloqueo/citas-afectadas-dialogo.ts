@@ -2,81 +2,82 @@ import { DatePipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
-import { MatTableModule } from '@angular/material/table';
+import { MatIconModule } from '@angular/material/icon';
 import { CitaAfectada } from '../../core/http/api.types';
 
-/**
- * El 409 de un bloqueo es el unico error del sistema con datos estructurados:
- * trae las citas CONFIRMADAS que el rango alcanzaria. HU-07 pide listarlas para
- * que se cancelen con motivo antes de reintentar (RN-03), asi que se muestran
- * como tabla y no como un snackbar.
- */
 @Component({
   selector: 'app-citas-afectadas-dialogo',
-  imports: [DatePipe, MatButtonModule, MatDialogModule, MatTableModule],
+  imports: [DatePipe, MatButtonModule, MatDialogModule, MatIconModule],
   template: `
-    <h2 mat-dialog-title>El bloqueo no se aplico</h2>
+    <h2 mat-dialog-title>El bloqueo no se aplicó</h2>
     <mat-dialog-content>
-      <p>{{ datos.mensaje }}</p>
+      <p class="dc-aviso dc-aviso--advertencia">
+        <mat-icon aria-hidden="true">warning</mat-icon>
+        <span>{{ datos.mensaje }}</span>
+      </p>
       <p class="explicacion">
-        Hay citas confirmadas dentro del rango. Cancelalas con motivo antes de volver a
+        Hay citas confirmadas dentro del rango. Cancélalas con motivo antes de volver a
         registrar el bloqueo.
       </p>
 
-      <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de citas afectadas por el bloqueo">
-        <table mat-table [dataSource]="datos.citas">
-          <ng-container matColumnDef="codigo">
-            <th mat-header-cell *matHeaderCellDef>Código</th>
-            <td mat-cell *matCellDef="let cita">{{ cita.codigo }}</td>
-          </ng-container>
-
-          <ng-container matColumnDef="paciente">
-            <th mat-header-cell *matHeaderCellDef>Paciente</th>
-            <td mat-cell *matCellDef="let cita">
-              {{ cita.paciente }}
-              <span class="historia">{{ cita.numeroHistoria }}</span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="inicio">
-            <th mat-header-cell *matHeaderCellDef>Inicio</th>
-            <td mat-cell *matCellDef="let cita">{{ cita.inicio | date: 'short' }}</td>
-          </ng-container>
-
-          <ng-container matColumnDef="fin">
-            <th mat-header-cell *matHeaderCellDef>Fin</th>
-            <td mat-cell *matCellDef="let cita">{{ cita.fin | date: 'short' }}</td>
-          </ng-container>
-
-          <tr mat-header-row *matHeaderRowDef="columnas"></tr>
-          <tr mat-row *matRowDef="let fila; columns: columnas"></tr>
-        </table>
-      </div>
+      <ul class="citas" aria-label="Citas afectadas por el bloqueo">
+        @for (cita of datos.citas; track cita.codigo) {
+          <li>
+            <div>
+              <p class="paciente">{{ cita.paciente }}</p>
+              <p class="historia">{{ cita.numeroHistoria }}</p>
+            </div>
+            <div class="cuando">
+              <p>{{ cita.inicio | date: 'd MMM, HH:mm' }} – {{ cita.fin | date: 'HH:mm' }}</p>
+              <p class="historia">{{ cita.codigo }}</p>
+            </div>
+          </li>
+        }
+      </ul>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-flat-button color="primary" type="button" mat-dialog-close>Entendido</button>
+      <button mat-flat-button type="button" mat-dialog-close>Entendido</button>
     </mat-dialog-actions>
   `,
   styles: `
     .explicacion {
-      font-size: 0.875rem;
-      opacity: 0.8;
+      margin: 0 0 var(--space-3);
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
-    .tabla-scroll {
-      overflow-x: auto;
+    .citas {
+      list-style: none;
+      margin: 0;
+      padding: 0 var(--space-4);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
     }
-    table {
-      width: 100%;
-      min-width: 34rem;
+    .citas li {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .citas li:last-child {
+      border-bottom: none;
+    }
+    .citas p {
+      margin: 0;
+    }
+    .paciente {
+      font-weight: 500;
+    }
+    .cuando {
+      text-align: right;
+      font: var(--text-code);
     }
     .historia {
-      display: block;
-      font-size: 0.75rem;
-      opacity: 0.7;
+      font: var(--text-code);
+      color: var(--ink-muted);
     }
   `,
 })
 export class CitasAfectadasDialogo {
   protected readonly datos = inject<{ mensaje: string; citas: CitaAfectada[] }>(MAT_DIALOG_DATA);
-  protected readonly columnas = ['codigo', 'paciente', 'inicio', 'fin'];
 }

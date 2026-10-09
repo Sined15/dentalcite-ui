@@ -4,30 +4,19 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule } from '@angular/material/radio';
 import { mensajeDeError } from '../../core/http/api-error';
 import { Cita } from '../../models';
 import { CitaService } from '../../services/cita.service';
 import { BloqueAgrupado } from './agrupar-franjas';
 
-/**
- * Lo que devuelve el dialogo al cerrarse.
- *
- * RF-16 pide que, cuando la franja se ocupa entre la consulta y la confirmacion,
- * el sistema informe «y recalcule la disponibilidad». Informar es del servidor;
- * recalcular es del portal, y para eso el dialogo tiene que decir si lo que fallo
- * invalida la lista de franjas que hay detras.
- */
 export interface ReservarResultado {
-  /** La cita creada, cuando la reserva prospero. */
   cita?: Cita;
-  /** El aviso a mostrar cuando la franja dejo de estar disponible (409). */
   recargar?: string;
 }
 
-/** A quien pertenece la cita cuando no la reserva el propio paciente (HU-14). */
 export interface ReservarPara {
-  /** Identificador de la ficha, que es lo que viaja como `pacienteId`. */
   id: string;
   nombre: string;
   numeroHistoria: string;
@@ -37,41 +26,32 @@ export interface ReservarDialogoDatos {
   tratamientoId: string;
   tratamientoNombre: string;
   duracionMinutos: number;
-  /** "YYYY-MM-DD". */
   fecha: string;
   bloque: BloqueAgrupado;
-  /**
-   * Ausente cuando reserva el propio paciente (HU-09). Presente cuando reserva
-   * recepcion (HU-14): entonces se muestra de quien es la cita, porque quien
-   * confirma no es quien va a venir.
-   */
   paciente?: ReservarPara;
 }
 
-/**
- * Confirmacion de la reserva (HU-09 · RF-15, HU-14 · RF-17).
- *
- * RF-15 concede al paciente «reservar eligiendo tratamiento, odontologo y
- * franja», asi que el bloque no se reserva a ciegas: se ofrecen los odontologos
- * libres en el y las horas exactas de cada uno. Es para lo que
- * {@code agruparFranjas} conserva los inicios en vez de descartarlos al agrupar
- * de treinta en treinta. Cuando solo hay una opcion de cada, viene elegida.
- */
 @Component({
   selector: 'app-reservar-dialogo',
-  imports: [DatePipe, FormsModule, MatButtonModule, MatDialogModule, MatRadioModule],
+  imports: [
+    DatePipe,
+    FormsModule,
+    MatButtonModule,
+    MatDialogModule,
+    MatIconModule,
+    MatRadioModule,
+  ],
   template: `
     <h2 mat-dialog-title>Reservar cita</h2>
     <mat-dialog-content>
-      <p class="resumen">
-        <strong>{{ datos.tratamientoNombre }}</strong> · {{ datos.duracionMinutos }} min<br />
-        {{ datos.fecha | date: "EEEE d 'de' MMMM" }}
+      <p class="dc-resumen">
+        <mat-icon aria-hidden="true">event</mat-icon>
+        <span>
+          <strong>{{ datos.tratamientoNombre }}</strong> · {{ datos.duracionMinutos }} min<br />
+          {{ datos.fecha | date: "EEEE d 'de' MMMM" }}
+        </span>
       </p>
 
-      <!--
-        Recepcion confirma citas de otras personas una detras de otra: de quien
-        es esta tiene que estar delante al pulsar, no dos pantallas atras.
-      -->
       @if (datos.paciente; as paciente) {
         <p class="para">
           Para <strong>{{ paciente.nombre }}</strong>
@@ -109,7 +89,10 @@ export interface ReservarDialogoDatos {
         </p>
       }
 
-      <p class="nota">El consultorio se asigna automáticamente al confirmar.</p>
+      <p class="dc-aviso">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <span>El consultorio se asigna automáticamente al confirmar.</span>
+      </p>
 
       @if (error(); as mensaje) {
         <p class="error" role="alert">{{ mensaje }}</p>
@@ -119,7 +102,6 @@ export interface ReservarDialogoDatos {
       <button mat-button type="button" (click)="dialogRef.close(null)">Cancelar</button>
       <button
         mat-flat-button
-        color="primary"
         type="button"
         [disabled]="enviando()"
         (click)="confirmar()"
@@ -129,54 +111,54 @@ export interface ReservarDialogoDatos {
     </mat-dialog-actions>
   `,
   styles: `
-    .resumen {
-      margin: 0 0 1rem;
-    }
     fieldset {
       border: none;
       padding: 0;
-      margin: 0 0 1rem;
+      margin: 0 0 var(--space-4);
     }
     legend {
-      font-size: 0.875rem;
-      opacity: 0.8;
-      margin-bottom: 0.5rem;
+      font: var(--text-label);
+      padding: 0;
+      margin-bottom: var(--space-2);
     }
     mat-radio-group {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: var(--space-2);
     }
-    /* Las horas caben en fila; a 360 px se reparten en varias. */
+    mat-radio-button {
+      padding-right: var(--space-3);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+    mat-radio-button.mat-mdc-radio-checked {
+      border-color: var(--brand);
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
+    }
     .horas mat-radio-group {
       flex-direction: row;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: var(--space-2);
     }
     .unico {
-      margin: 0 0 0.75rem;
+      margin: 0 0 var(--space-3);
     }
     .para {
-      margin: 0 0 1rem;
-      padding: 0.5rem 0.75rem;
-      border-radius: 0.5rem;
-      background: var(--mat-sys-surface-container-highest, #e2e2e6);
+      margin: 0 0 var(--space-4);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
       display: flex;
       flex-direction: column;
     }
     .historia {
-      font-size: 0.8125rem;
-      color: var(--mat-sys-on-surface-variant, #45464f);
-    }
-    /* Color propio en vez de opacidad: al 75 % el contraste caia a 4.45:1
-       sobre el fondo del dialogo, por debajo del 4.5:1 que exige RNF-08. */
-    .nota {
-      font-size: 0.875rem;
-      color: var(--mat-sys-on-surface-variant, #45464f);
-      margin: 0.5rem 0 0;
+      font: var(--text-code);
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
       font-size: 0.875rem;
       margin: 0.75rem 0 0;
     }
@@ -198,7 +180,6 @@ export class ReservarDialogo {
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /** Cada odontólogo tiene sus propios huecos dentro del bloque. */
   protected readonly horasDisponibles = computed<string[]>(() => {
     const id = this.odontologoActual();
     return this.odontologos.find((o) => o.id === id)?.inicios ?? [];
@@ -206,7 +187,6 @@ export class ReservarDialogo {
 
   protected cambiarOdontologo(): void {
     this.odontologoActual.set(this.odontologoElegido);
-    // La hora elegida puede no existir en la agenda del nuevo odontólogo.
     const horas = this.horasDisponibles();
     if (!horas.includes(this.horaElegida)) {
       this.horaElegida = horas[0];
@@ -227,10 +207,6 @@ export class ReservarDialogo {
         odontologoId: this.odontologoElegido,
         fecha: this.datos.fecha,
         hora: this.horaElegida,
-        // Ausente, no vacio: cuando reserva el propio paciente la clave no
-        // viaja siquiera. El servidor responde 403 a un PACIENTE que la mande,
-        // aunque sea su propia ficha, asi que mandarla con `undefined` seria
-        // fiarlo todo a que JSON.stringify la descarte.
         ...(paciente ? { pacienteId: paciente.id } : {}),
       })
       .subscribe({
@@ -242,16 +218,11 @@ export class ReservarDialogo {
           this.enviando.set(false);
           const mensaje = mensajeDeError(err);
 
-          // Un 409 significa que el mundo cambio debajo: la franja se ocupo, o la
-          // cuota se agoto. Seguir mirando la lista vieja es peor que refrescarla,
-          // asi que se cierra y la pantalla recalcula (RF-16).
           if (err instanceof HttpErrorResponse && err.status === 409) {
             this.dialogRef.close({ recargar: mensaje });
             return;
           }
 
-          // El 422 de RN-05 no invalida nada: la franja sigue ahi y el paciente
-          // puede elegir otra hora sin rehacer la seleccion.
           this.error.set(mensaje);
         },
       });

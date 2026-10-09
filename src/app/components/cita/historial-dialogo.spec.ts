@@ -78,8 +78,6 @@ describe('HistorialDialogo', () => {
   });
 
   it('muestra la transicion con su responsable y su motivo', () => {
-    // Los tres datos que RF-21 exige que consten: que paso, quien lo ordeno y
-    // por que. Sin ellos la bitacora no sirve para auditar nada.
     montar();
     httpMock.expectOne(`${API}/cita-1/historial`).flush([CANCELACION]);
     fixture.detectChanges();
@@ -102,8 +100,6 @@ describe('HistorialDialogo', () => {
   });
 
   it('conserva el orden en que llegan las transiciones', () => {
-    // La bitacora vale por el orden: el servidor la devuelve de la mas antigua a
-    // la mas reciente y el dialogo no la reordena.
     montar();
     httpMock.expectOne(`${API}/cita-1/historial`).flush([
       { ...CANCELACION, id: 'his-0', estadoAnterior: null, estadoNuevo: 'CONFIRMADA', motivo: null },

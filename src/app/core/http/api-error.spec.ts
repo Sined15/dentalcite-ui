@@ -2,17 +2,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { describe, expect, it } from 'vitest';
 import { citasAfectadas, erroresDeValidacion, mensajeDeError } from './api-error';
 
-/**
- * Fija el contrato de errores del backend.
- *
- * Los cuerpos de 400 y 404 se capturaron del backend en ejecucion el
- * 2026-09-07. El backend usa tres formas distintas y confundirlas deja al
- * usuario sin mensaje, asi que conviene que un cambio en el servidor rompa
- * estas pruebas en vez de romper la interfaz en silencio.
- */
 describe('api-error', () => {
   it('extrae el mensaje del 400 de validacion, que es un mapa campo -> mensaje', () => {
-    // Real: POST /api/v1/especialidades con cuerpo {}
     const error = new HttpErrorResponse({
       status: 400,
       error: { nombre: 'El nombre de la especialidad es obligatorio' },
@@ -35,14 +26,12 @@ describe('api-error', () => {
   });
 
   it('extrae el mensaje de la forma habitual { message }', () => {
-    // Real: PUT /api/v1/especialidades/<id inexistente>
     const error = new HttpErrorResponse({
       status: 404,
       error: { message: 'Especialidad no encontrada.' },
     });
 
     expect(mensajeDeError(error)).toBe('Especialidad no encontrada.');
-    // Un 404 no es un error de validacion: no debe leerse como mapa de campos.
     expect(erroresDeValidacion(error)).toBeNull();
   });
 

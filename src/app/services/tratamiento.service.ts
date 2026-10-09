@@ -23,7 +23,6 @@ export class TratamientoService {
     return this.http.put<Tratamiento>(`${this.url}/${id}`, body);
   }
 
-  /** Baja logica. 409 si el tratamiento tiene citas activas (RN-12). */
   darDeBaja(id: string): Observable<void> {
     return this.http.patch<void>(`${this.url}/${id}`, null);
   }

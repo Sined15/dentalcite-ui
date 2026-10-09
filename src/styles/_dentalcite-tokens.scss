@@ -1,0 +1,239 @@
+/* DentalCite — generated from tokens.json */
+:root, [data-theme="light"] {
+  --surface-page: #f2f6f6; /* Fondo de todas las páginas, detrás de las tarjetas. Nunca pongas texto directamente sobre él sin un contenedor. */
+  --surface: #ffffff; /* Fondo de tarjetas, barra superior, tablas y paneles. Soporta `ink`, `ink-muted` y todos los tokens `-ink`. */
+  --surface-sunken: #e8eeee; /* Fondo hundido: campos deshabilitados, celdas alternas, el área de resultados bajo el buscador de franjas. */
+  --surface-overlay: #ffffff; /* Fondo de diálogos, menús y selects desplegados. Siempre con `shadow-lg`. */
+  --ink: #0d1b1a; /* Color de texto principal sobre `surface`, `surface-page`, `surface-sunken`, `surface-overlay` y todos los tintes `-soft`. */
+  --ink-muted: #4c605e; /* Texto secundario sobre `surface`, `surface-page`, `surface-sunken` y `surface-overlay`: especialidad, duración, pies de tarjeta, ayuda de formulario. */
+  --ink-faint: #6b807e; /* Solo marcas no textuales sobre `surface` y `surface-page`: iconos decorativos, separadores gruesos, placeholders. No lo uses para texto que haya que leer. */
+  --brand: #0c6b62; /* Relleno de la acción principal: botón filled, barra activa, tick de checkbox. Lleva `on-brand` encima. */
+  --brand-hover: #0a5a53; /* Relleno de la acción principal en hover. Lleva `on-brand` encima. */
+  --brand-pressed: #084a44; /* Relleno de la acción principal al pulsar y en estado activo. Lleva `on-brand` encima. */
+  --brand-ink: #0a5f57; /* Texto y iconos de marca sobre `surface`, `surface-page` y `surface-overlay`: botón de texto, enlace del breadcrumb, cifra destacada. */
+  --brand-soft: #dceeec; /* Tinte de marca para fondos tranquilos: chip seleccionado, franja elegida, fila resaltada. Lleva `ink` o `on-brand-soft` encima. */
+  --on-brand: #ffffff; /* Texto e iconos sobre `brand`, `brand-hover` y `brand-pressed`. */
+  --on-brand-soft: #06413c; /* Texto e iconos de énfasis sobre `brand-soft`. */
+  --accent: #17568f; /* Relleno de la acción secundaria y de los estados informativos. Lleva `on-accent` encima. */
+  --accent-ink: #155a9b; /* Texto de enlace sobre `surface`, `surface-page` y `surface-overlay`. Reserva el azul para enlaces: el teal es para acciones. */
+  --accent-soft: #e0ecf9; /* Fondo de avisos informativos y de la nota "Las citas se reservan con al menos dos horas de antelación". Lleva `ink` encima. */
+  --on-accent: #ffffff; /* Texto e iconos sobre `accent`. */
+  --success: #1c7a4f; /* Relleno de confirmación: cita reservada, cuenta creada. Lleva `on-success` encima y siempre un icono y una palabra. */
+  --success-ink: #166644; /* Texto de confirmación sobre `surface`, `surface-page` y `surface-overlay`. */
+  --on-success: #ffffff; /* Texto e iconos sobre `success`. */
+  --danger: #a4262c; /* Relleno destructivo o de error: cancelar cita, franja ya ocupada. Lleva `on-danger` encima y siempre un icono y una palabra. */
+  --danger-ink: #9c242a; /* Texto de error de validación sobre `surface`, `surface-page` y `surface-overlay`. */
+  --on-danger: #ffffff; /* Texto e iconos sobre `danger`. */
+  --warning: #8a5a00; /* Relleno de aviso: cambio con menos de 24 h, datos incompletos. Lleva `on-warning` encima y siempre un icono y una palabra. */
+  --warning-ink: #7a5000; /* Texto de aviso sobre `surface`, `surface-page` y `surface-overlay`. */
+  --on-warning: #ffffff; /* Texto e iconos sobre `warning`. */
+  --border: #d3dedd; /* Filete de 1 px entre superficies: borde de tarjeta, separador de la barra superior, líneas de tabla. Decorativo, no lo uses solo para separar controles. */
+  --border-strong: #6c8280; /* Borde de controles que deben verse: campo de formulario en reposo, botón outlined, chip. Cumple 3:1 sobre las cuatro superficies. */
+  --focus-ring: #0c6b62; /* Anillo de foco de teclado, 2 px, separado del elemento por 2 px de la superficie que hay debajo. No lo uses como color de relleno. */
+  --spec-general: #15657f; /* Odontología General: icono y filete de la tarjeta. Como texto, sobre `surface`, `surface-page` y `spec-general-soft`. */
+  --spec-general-soft: #e0eef4; /* Fondo del recuadro del icono de Odontología General. Lleva `spec-general` o `ink` encima. */
+  --spec-estetica: #9b3a68; /* Odontología Estética: icono y filete de la tarjeta. Como texto, sobre `surface`, `surface-page` y `spec-estetica-soft`. */
+  --spec-estetica-soft: #f7e6ee; /* Fondo del recuadro del icono de Odontología Estética. Lleva `spec-estetica` o `ink` encima. */
+  --spec-ortodoncia: #1e7350; /* Ortodoncia: icono y filete de la tarjeta. Como texto, sobre `surface`, `surface-page` y `spec-ortodoncia-soft`. */
+  --spec-ortodoncia-soft: #dff0e8; /* Fondo del recuadro del icono de Ortodoncia. Lleva `spec-ortodoncia` o `ink` encima. */
+  --spec-rehabilitacion: #5c6b1f; /* Rehabilitación Oral: icono y filete de la tarjeta. Como texto, sobre `surface`, `surface-page` y `spec-rehabilitacion-soft`. */
+  --spec-rehabilitacion-soft: #eef0dc; /* Fondo del recuadro del icono de Rehabilitación Oral. Lleva `spec-rehabilitacion` o `ink` encima. */
+  --spec-periodoncia: #6b4bb0; /* Periodoncia: icono y filete de la tarjeta. Como texto, sobre `surface`, `surface-page` y `spec-periodoncia-soft`. */
+  --spec-periodoncia-soft: #ece6f8; /* Fondo del recuadro del icono de Periodoncia. Lleva `spec-periodoncia` o `ink` encima. */
+  --spec-endodoncia: #8f5514; /* Endodoncia: icono y filete de la tarjeta. Como texto, sobre `surface`, `surface-page` y `spec-endodoncia-soft`. */
+  --spec-endodoncia-soft: #f8ead6; /* Fondo del recuadro del icono de Endodoncia. Lleva `spec-endodoncia` o `ink` encima. */
+  --spec-cirugia: #3d5a92; /* Cirugía Bucal y Maxilofacial: icono y filete de la tarjeta. Como texto, sobre `surface`, `surface-page` y `spec-cirugia-soft`. */
+  --spec-cirugia-soft: #e6ecf7; /* Fondo del recuadro del icono de Cirugía Bucal y Maxilofacial. Lleva `spec-cirugia` o `ink` encima. */
+  --shadow-xs: 0 1px 2px rgba(9,27,26,0.06); /* Tarjeta en reposo, cuando hace falta despegarla del fondo sin borde. */
+  --shadow-sm: 0 1px 2px rgba(9,27,26,0.06), 0 2px 8px rgba(9,27,26,0.06); /* Tarjeta en hover y barra superior al hacer scroll. */
+  --shadow-md: 0 2px 4px rgba(9,27,26,0.05), 0 10px 24px rgba(9,27,26,0.10); /* Menús, selects desplegados y la tarjeta de autenticación. */
+  --shadow-lg: 0 8px 16px rgba(9,27,26,0.08), 0 28px 56px rgba(9,27,26,0.16); /* Diálogos sobre el velo. */
+}
+[data-theme="dark"] {
+  --surface-page: #0b1514;
+  --surface: #131e1d;
+  --surface-sunken: #0a1211;
+  --surface-overlay: #1a2625;
+  --ink: #e6efee;
+  --ink-muted: #a3b5b3;
+  --ink-faint: #7b8e8c;
+  --brand: #3fbfae;
+  --brand-hover: #57cfbf;
+  --brand-pressed: #6fdccd;
+  --brand-ink: #5ed3c2;
+  --brand-soft: #11332f;
+  --on-brand: #05231f;
+  --on-brand-soft: #8fe3d5;
+  --accent: #6aa9f0;
+  --accent-ink: #8cc0f7;
+  --accent-soft: #10283f;
+  --on-accent: #062038;
+  --success: #3fb377;
+  --success-ink: #5ac48c;
+  --on-success: #042315;
+  --danger: #e5645e;
+  --danger-ink: #f08e89;
+  --on-danger: #2a0605;
+  --warning: #e0a03a;
+  --warning-ink: #e8b45f;
+  --on-warning: #2a1c00;
+  --border: #2a3938;
+  --border-strong: #728684;
+  --focus-ring: #5fd4c4;
+  --spec-general: #63b8d6;
+  --spec-general-soft: #12303a;
+  --spec-estetica: #e08ab4;
+  --spec-estetica-soft: #3a1a2a;
+  --spec-ortodoncia: #57c38f;
+  --spec-ortodoncia-soft: #103124;
+  --spec-rehabilitacion: #b0c15c;
+  --spec-rehabilitacion-soft: #2c3210;
+  --spec-periodoncia: #a892e8;
+  --spec-periodoncia-soft: #231b3e;
+  --spec-endodoncia: #dd9a4e;
+  --spec-endodoncia-soft: #38240e;
+  --spec-cirugia: #8fa9e0;
+  --spec-cirugia-soft: #1b2440;
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-md: 0 2px 4px rgba(0,0,0,0.5), 0 10px 24px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 16px rgba(0,0,0,0.5), 0 28px 56px rgba(0,0,0,0.6);
+}
+:root {
+  --space-1: 4px; /* Hueco entre un icono y su etiqueta. */
+  --space-2: 8px; /* Hueco entre líneas de un mismo bloque: nombre y especialidad. */
+  --space-3: 12px; /* Relleno vertical de chips y botones pequeños. */
+  --space-4: 16px; /* Relleno interior de tarjetas compactas y hueco entre chips de franja. */
+  --space-5: 20px; /* Relleno interior de la tarjeta de tratamiento. */
+  --space-6: 24px; /* Hueco entre tarjetas de la rejilla y relleno de diálogos y formularios. */
+  --space-8: 32px; /* Separación entre bloques dentro de una sección. */
+  --space-10: 40px; /* Separación entre secciones de una página. */
+  --space-12: 48px; /* Aire sobre y bajo el hero. */
+  --space-16: 64px; /* Margen superior del contenido tras la barra y separación antes del pie. */
+  --space-20: 80px; /* Aire vertical máximo: solo hero de Inicio en pantallas anchas. */
+  --radius-xs: 4px; /* Filete del recuadro de foco y esquinas de marcas pequeñas. */
+  --radius-sm: 8px; /* Campos de formulario y recuadro del icono de especialidad. */
+  --radius-md: 12px; /* Tarjetas de tratamiento, chips de franja y tarjetas de profesional. */
+  --radius-lg: 16px; /* Paneles grandes: buscador de franjas, tarjeta de autenticación. */
+  --radius-xl: 24px; /* Diálogos. */
+  --radius-pill: 999px; /* Botones y avatares. Es la forma que ya usa la aplicación: consérvala. */
+  --layout-max: 1120px; /* Ancho máximo del contenido, centrado. La barra superior llega a los bordes, su contenido no. */
+  --layout-gutter: 24px; /* Margen lateral mínimo entre el contenido y el borde de la ventana. */
+  --layout-prose: 680px; /* Ancho máximo de un párrafo seguido: entradilla del hero, cuerpo del diálogo. */
+  --layout-form: 440px; /* Ancho de un formulario de una columna: inicio de sesión. */
+  --layout-form-wide: 560px; /* Ancho de un formulario de dos columnas: registro de paciente. */
+  --layout-card-min: 248px; /* Ancho mínimo de una tarjeta en la rejilla de tratamientos, con repeat(auto-fill, minmax(...)). */
+  --layout-navbar: 64px; /* Alto de la barra superior. */
+  --opacity-disabled: 0.38; /* Contenido de un control deshabilitado. */
+  --opacity-hover: 0.08; /* Capa de estado en hover sobre un relleno de marca. */
+  --opacity-focus: 0.12; /* Capa de estado con foco, bajo el anillo. */
+  --opacity-pressed: 0.16; /* Capa de estado al pulsar. */
+  --opacity-scrim: 0.55; /* Velo negro bajo un diálogo. */
+  --font-display: "Archivo", "Roboto", system-ui, sans-serif;
+  --font-sans: "Roboto", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
+  --text-display-lg: 700 44px/48px var(--font-display); /* Titular del hero. Una sola vez por página y nunca por debajo de una tarjeta. */
+  --text-display-md: 700 34px/40px var(--font-display); /* Título de página en Especialidades, Equipo y el buscador de franjas. */
+  --text-display-sm: 700 28px/34px var(--font-display); /* Título de detalle de especialidad y encabezado de diálogo grande. */
+  --text-title-lg: 600 22px/28px var(--font-display); /* Título de sección dentro de una página. */
+  --text-title-md: 600 18px/24px var(--font-display); /* Título de diálogo y de tarjeta de autenticación. */
+  --text-title-sm: 600 16px/22px var(--font-display); /* Nombre del tratamiento en la tarjeta y nombre del profesional. */
+  --text-body-lg: 400 16px/26px var(--font-sans); /* Entradilla del hero y párrafos de explicación largos. Máximo `layout-prose` de ancho. */
+  --text-body: 400 15px/24px var(--font-sans); /* Texto corriente: descripción del tratamiento, notas del formulario, cuerpo del diálogo. */
+  --text-body-sm: 400 13px/20px var(--font-sans); /* Ayuda bajo un campo, pie de página y metadatos secundarios. */
+  --text-label: 500 13px/16px var(--font-sans); /* Etiquetas de control, texto de chip y metadatos con icono al lado. */
+  --text-overline: 600 11px/16px var(--font-sans); /* Rótulo de especialidad sobre el nombre del tratamiento. Escríbelo en mayúsculas en el HTML, no con text-transform, para que el lector de pantalla no deletree. */
+  --text-code: 500 13px/18px var(--font-mono); /* Números de colegiatura, de documento y de cita, donde alinear dígitos importa. */
+  --text-time: 600 17px/22px var(--font-mono); /* La hora dentro del chip de franja. Cifras de ancho fijo para que la rejilla no baile. */
+}
+.display-lg {
+  font-family: var(--font-display);
+  font-size: 44px;
+  line-height: 48px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.display-md {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 40px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.display-sm {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.title-lg {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.title-md {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.title-sm {
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.body-lg {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 26px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.body-sm {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.overline {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.time {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: 0;
+}

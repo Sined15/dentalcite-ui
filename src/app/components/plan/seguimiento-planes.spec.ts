@@ -61,7 +61,6 @@ describe('SeguimientoPlanes', () => {
     fixture = TestBed.createComponent(SeguimientoPlanes);
   }
 
-  /** «Tuyo» se resuelve igual que en el servidor: de la cuenta a la ficha y de ahí al registro. */
   function resolverQuienSoy(): void {
     httpMock.expectOne(API_PERFIL).flush({ id: 'usu-1', rol: 'ODONTOLOGO', fichaId: MI_FICHA });
     httpMock

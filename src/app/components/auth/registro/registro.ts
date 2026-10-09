@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -13,7 +14,6 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { mensajeDeError } from '../../../core/http/api-error';
 import { TIPOS_DOCUMENTO, TipoDocumento } from '../../../models';
 
-/** Version del consentimiento que se registra con el alta (RNF-06). */
 const VERSION_CONSENTIMIENTO = '1.0';
 
 @Component({
@@ -25,6 +25,7 @@ const VERSION_CONSENTIMIENTO = '1.0';
     MatCardModule,
     MatCheckboxModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatProgressBarModule,
     MatSelectModule,
@@ -35,11 +36,24 @@ const VERSION_CONSENTIMIENTO = '1.0';
         @if (enviando()) {
           <mat-progress-bar mode="indeterminate" aria-label="Creando cuenta" />
         }
+        <a class="marca" routerLink="/" aria-label="DentalCite, ir a inicio">
+          <span class="sello" aria-hidden="true"><mat-icon>medical_services</mat-icon></span>
+          <span>Dental<b>Cite</b></span>
+        </a>
         <mat-card-header>
           <mat-card-title>Crear cuenta de paciente</mat-card-title>
+          <mat-card-subtitle>
+            Con tu cuenta puedes reservar, ver tus citas y seguir tus tratamientos.
+          </mat-card-subtitle>
         </mat-card-header>
 
         <mat-card-content>
+          @if (destinoPedido) {
+            <p class="aviso">
+              <mat-icon aria-hidden="true">keyboard_return</mat-icon>
+              <span>Al terminar volverás a la franja que elegiste, con la misma hora.</span>
+            </p>
+          }
           <form [formGroup]="formulario" (ngSubmit)="enviar()">
             <div class="fila">
               <mat-form-field appearance="outline">
@@ -84,7 +98,7 @@ const VERSION_CONSENTIMIENTO = '1.0';
               @if (formulario.controls.correo.hasError('required')) {
                 <mat-error>El correo es obligatorio</mat-error>
               } @else if (formulario.controls.correo.hasError('email')) {
-                <mat-error>Debe ser un correo electronico valido</mat-error>
+                <mat-error>Escribe un correo electrónico válido</mat-error>
               }
             </mat-form-field>
 
@@ -109,7 +123,7 @@ const VERSION_CONSENTIMIENTO = '1.0';
             </mat-form-field>
 
             <mat-checkbox formControlName="consentimientoAceptado">
-              Acepto el tratamiento de mis datos personales (version
+              Acepto el tratamiento de mis datos personales (versión
               {{ versionConsentimiento }})
             </mat-checkbox>
             @if (
@@ -125,7 +139,6 @@ const VERSION_CONSENTIMIENTO = '1.0';
 
             <button
               mat-flat-button
-              color="primary"
               type="submit"
               [disabled]="formulario.invalid || enviando()"
             >
@@ -149,12 +162,63 @@ const VERSION_CONSENTIMIENTO = '1.0';
       align-items: center;
       min-height: 100dvh;
       padding: 1rem;
-      background: var(--mat-sys-surface-container-low, #f4f4f7);
+      background: var(--surface-page);
     }
     .tarjeta {
       width: 100%;
-      max-width: 34rem;
+      max-width: var(--layout-form-wide);
+      padding: var(--space-4) var(--space-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
     }
+    .marca {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      align-self: flex-start;
+      margin: var(--space-2) var(--space-4) var(--space-4);
+      font: 700 1.1875rem/1 var(--font-display);
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .marca b {
+      color: var(--brand-ink);
+    }
+    .sello {
+      width: 1.875rem;
+      height: 1.875rem;
+      border-radius: var(--radius-sm);
+      background: var(--brand);
+      color: var(--on-brand);
+      display: grid;
+      place-items: center;
+    }
+    .sello mat-icon {
+      width: 1.125rem;
+      height: 1.125rem;
+      font-size: 1.125rem;
+    }
+    mat-card-title {
+      font: var(--text-title-md);
+    }
+    .aviso {
+      display: flex;
+      gap: var(--space-3);
+      align-items: flex-start;
+      margin: var(--space-2) 0 0;
+      padding: var(--space-3) var(--space-4);
+      background: var(--accent-soft);
+      border-radius: var(--radius-md);
+      font: var(--text-body-sm);
+      color: var(--ink);
+    }
+    .aviso mat-icon {
+      flex: none;
+      color: var(--accent-ink);
+    }
+
     form {
       display: flex;
       flex-direction: column;
@@ -170,12 +234,18 @@ const VERSION_CONSENTIMIENTO = '1.0';
       flex: 1 1 12rem;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
       margin: 0.5rem 0;
-      font-size: 0.875rem;
+      font: var(--text-body-sm);
     }
     button[type='submit'] {
       margin-top: 1rem;
+      min-height: 3rem;
+    }
+    @media (max-width: 37.5rem) {
+      .tarjeta {
+        box-shadow: none;
+      }
     }
   `,
 })
@@ -186,11 +256,6 @@ export class Registro {
   private readonly snackBar = inject(MatSnackBar);
   private readonly ruta = inject(ActivatedRoute);
 
-  /**
-   * La pantalla a la que se queria llegar antes de crear la cuenta, que se pasa
-   * tal cual al login. No se valida aqui: el registro no navega a ella, y el
-   * login ya descarta cualquier destino que no sea de esta aplicacion.
-   */
   protected readonly destinoPedido = this.ruta.snapshot.queryParamMap.get('returnUrl');
 
   protected readonly tiposDocumento = TIPOS_DOCUMENTO;
@@ -206,7 +271,6 @@ export class Registro {
     correo: ['', [Validators.required, Validators.email]],
     telefono: [''],
     password: ['', [Validators.required, Validators.minLength(8)]],
-    // El backend exige @AssertTrue: sin marcar, responde 400.
     consentimientoAceptado: [false, [Validators.requiredTrue]],
   });
 
@@ -230,7 +294,6 @@ export class Registro {
           this.snackBar.open('Cuenta creada. Ya puedes iniciar sesión.', 'Cerrar', {
             duration: 5000,
           });
-          // El registro no abre sesion: el camino de vuelta sigue por el login.
           void this.router.navigate(['/login'], {
             queryParams: { returnUrl: this.destinoPedido },
           });

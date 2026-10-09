@@ -47,11 +47,6 @@ interface Interno {
   error: () => string | null;
 }
 
-/**
- * HU-13 · RF-07. Lo que se fija aquí es la decisión que RNF-02 obliga a tomar:
- * que la paginación y el filtrado ocurren en el **servidor**, y que el listado
- * no se trae entero para filtrarlo en memoria como hacen los catálogos.
- */
 describe('PacienteList', () => {
   let fixture: ComponentFixture<PacienteList>;
   let httpMock: HttpTestingController;
@@ -82,7 +77,6 @@ describe('PacienteList', () => {
     httpMock.verify();
   });
 
-  /** Una consulta por pagina, no la descarga completa del padron. */
   it('al cambiar de pagina pide esa pagina al servidor', () => {
     httpMock.expectOne((r) => r.url === PACIENTES).flush(pagina(0, 20, 45));
 
@@ -93,10 +87,6 @@ describe('PacienteList', () => {
     req.flush(pagina(2, 20, 45));
   });
 
-  /**
-   * Sin la espera, escribir un apellido de ocho letras lanzaría ocho búsquedas
-   * y solo importa la última.
-   */
   it('agrupa las pulsaciones antes de consultar, y vuelve a la primera pagina', () => {
     httpMock.expectOne((r) => r.url === PACIENTES).flush(pagina(0, 20, 45));
 

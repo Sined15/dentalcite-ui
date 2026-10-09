@@ -41,8 +41,6 @@ describe('CancelarDialogo', () => {
   const cerrar = vi.fn();
 
   function montar(mostrarPaciente = true): void {
-    // Por defecto, el caso de recepcion (HU-11): identificar de quien es la cita
-    // es lo primero. El caso del paciente (HU-15) se prueba aparte.
     const datos: CancelarDialogoDatos = { cita: CITA, mostrarPaciente };
     TestBed.configureTestingModule({
       imports: [CancelarDialogo],
@@ -89,8 +87,6 @@ describe('CancelarDialogo', () => {
   });
 
   it('sin motivo no llega a salir', () => {
-    // El 400 del servidor es la red, no el camino normal: el boton esta
-    // deshabilitado y el metodo tampoco hace nada si se le llama a mano.
     montar();
     componente.motivo = '   ';
     componente.cancelarCita();
@@ -110,8 +106,6 @@ describe('CancelarDialogo', () => {
   });
 
   it('el 409 se muestra sin cerrar el dialogo', () => {
-    // La cita ya no esta CONFIRMADA: quien opera necesita leer por que no se
-    // pudo, y cerrar de golpe se lo ocultaria.
     montar();
     componente.motivo = 'El paciente reprograma';
     componente.cancelarCita();
@@ -123,7 +117,6 @@ describe('CancelarDialogo', () => {
 
     expect(cerrar).not.toHaveBeenCalled();
     expect(componente.error()).toContain('ya esta en estado CANCELADA');
-    // Y se puede volver a intentar: el formulario no queda bloqueado.
     expect(componente.enviando()).toBe(false);
   });
 
@@ -150,7 +143,6 @@ describe('CancelarDialogo', () => {
   });
 
   it('HU-15: cancelando la propia, no nombra al paciente', () => {
-    // Es quien esta mirando: decirle su propio nombre no informa de nada.
     montar(false);
 
     const texto = (fixture.nativeElement as HTMLElement).textContent ?? '';

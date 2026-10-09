@@ -1,16 +1,24 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeError } from '../../core/http/api-error';
-import { Usuario } from '../../models';
+import { Rol, Usuario } from '../../models';
 import { UsuarioService } from '../../services/usuario.service';
 
-/** GET /api/v1/usuarios/me — accesible a cualquier rol sobre su propia cuenta. */
+const ETIQUETA_ROL: Record<Rol, string> = {
+  ADMINISTRADOR: 'Administración',
+  RECEPCIONISTA: 'Recepción',
+  ODONTOLOGO: 'Odontólogo',
+  PACIENTE: 'Paciente',
+};
+
 @Component({
   selector: 'app-perfil',
-  imports: [RouterLink, MatButtonModule, MatCardModule, MatProgressBarModule],
+  imports: [RouterLink, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule],
   template: `
     <h1>Mi perfil</h1>
 
@@ -19,78 +27,167 @@ import { UsuarioService } from '../../services/usuario.service';
     } @else if (error(); as mensaje) {
       <p class="error" role="alert">{{ mensaje }}</p>
     } @else if (usuario(); as u) {
-      <mat-card>
+      <mat-card appearance="outlined">
         <mat-card-content>
+          <div class="persona">
+            <span class="iniciales" aria-hidden="true">{{ iniciales() }}</span>
+            <div>
+              <h2>{{ u.nombre }}</h2>
+              <span class="rol">{{ etiquetaRol() }}</span>
+            </div>
+          </div>
           <dl>
-            <dt>Nombre</dt>
-            <dd>{{ u.nombre }}</dd>
             <dt>Correo</dt>
             <dd>{{ u.correo }}</dd>
-            <dt>Rol</dt>
-            <dd>{{ u.rol }}</dd>
             <dt>Estado</dt>
-            <dd>{{ u.activo ? 'Activa' : 'Desactivada' }}</dd>
-            @if (u.fichaId) {
+            <dd>
+              <span
+                class="dc-estado"
+                [class.dc-estado--ok]="u.activo"
+                [class.dc-estado--error]="!u.activo"
+              >
+                <mat-icon aria-hidden="true">{{ u.activo ? 'check_circle' : 'block' }}</mat-icon>
+                {{ u.activo ? 'Cuenta activa' : 'Cuenta desactivada' }}
+              </span>
+            </dd>
+            @if (u.fichaId && u.rol === 'PACIENTE') {
               <dt>Ficha clínica</dt>
-              <dd class="mono">{{ u.fichaId }}</dd>
+              <dd><a class="enlace" [routerLink]="['/pacientes', u.fichaId]">Ver mi ficha</a></dd>
             }
           </dl>
+          <p class="pie">Para cambiar tus datos, pídeselo a Administración.</p>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card appearance="outlined" class="seguridad">
+        <mat-card-content>
+          <h2>Seguridad</h2>
+          <p>
+            Al cambiar la contraseña se cierran las sesiones abiertas con tu cuenta y tendrás que
+            volver a entrar.
+          </p>
         </mat-card-content>
         <mat-card-actions>
-          <a mat-button routerLink="/cambiar-password">Cambiar contraseña</a>
+          <a mat-stroked-button routerLink="/cambiar-password">
+            <mat-icon aria-hidden="true">key</mat-icon>
+            Cambiar contraseña
+          </a>
+          <button mat-button type="button" class="salir" (click)="cerrarSesion()">
+            <mat-icon aria-hidden="true">logout</mat-icon>
+            Cerrar sesión
+          </button>
         </mat-card-actions>
       </mat-card>
     }
   `,
   styles: `
     h1 {
-      font-size: 1.5rem;
-      margin: 0 0 1rem;
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
+      margin: 0 0 var(--space-5);
+    }
+    h2 {
+      font: var(--text-title-md);
+      margin: 0;
     }
     mat-card {
       max-width: 34rem;
+      margin-bottom: var(--space-4);
+    }
+    .persona {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      margin-bottom: var(--space-5);
+    }
+    .iniciales {
+      width: 4rem;
+      height: 4rem;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-pill);
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
+      font: 700 1.375rem/1 var(--font-display);
+    }
+    .rol {
+      display: inline-block;
+      margin-top: var(--space-2);
+      padding: 6px var(--space-3);
+      border-radius: var(--radius-pill);
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
+      font: var(--text-label);
     }
     dl {
       display: grid;
       grid-template-columns: minmax(8rem, auto) 1fr;
-      gap: 0.5rem 1rem;
+      gap: var(--space-2) var(--space-4);
       margin: 0;
     }
     dt {
-      font-weight: 600;
+      font: var(--text-label);
+      color: var(--ink-muted);
+      padding-top: 2px;
     }
     dd {
       margin: 0;
     }
-    .mono {
-      font-family: monospace;
-      font-size: 0.8125rem;
-      // Un UUID no tiene espacios donde partir: sin esto desbordaba su columna
-      // y estiraba la tarjeta mas alla del ancho del movil.
-      overflow-wrap: anywhere;
+    .enlace {
+      color: var(--accent-ink);
+      text-decoration: underline;
     }
-    // Por debajo de este ancho las dos columnas dejan al valor una franja
-    // demasiado estrecha; etiqueta y valor pasan a filas consecutivas.
+    .salir {
+      --mat-button-text-label-text-color: var(--danger-ink);
+    }
+    .pie {
+      margin: var(--space-5) 0 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .seguridad p {
+      margin: var(--space-2) 0 0;
+      color: var(--ink-muted);
+    }
+    .seguridad mat-card-actions {
+      padding: 0 var(--space-4) var(--space-4);
+    }
     @media (max-width: 30rem) {
       dl {
         grid-template-columns: 1fr;
         gap: 0.125rem;
       }
       dd:not(:last-child) {
-        margin-bottom: 0.75rem;
+        margin-bottom: var(--space-3);
       }
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
   `,
 })
 export class Perfil {
   private readonly usuarios = inject(UsuarioService);
+  private readonly auth = inject(AuthService);
 
   protected readonly usuario = signal<Usuario | null>(null);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
+
+  protected readonly etiquetaRol = computed(() => {
+    const rol = this.usuario()?.rol;
+    return rol ? (ETIQUETA_ROL[rol] ?? rol) : '';
+  });
+
+  protected readonly iniciales = computed(() => {
+    const partes = (this.usuario()?.nombre ?? '').trim().split(/\s+/).filter(Boolean);
+    return (partes[0]?.charAt(0) ?? '') + (partes[1]?.charAt(0) ?? '') || '?';
+  });
+
+  protected cerrarSesion(): void {
+    this.auth.logout();
+  }
 
   constructor() {
     this.usuarios.obtenerPerfilPropio().subscribe({

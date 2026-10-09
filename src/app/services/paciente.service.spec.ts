@@ -5,12 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { environment } from '../../environments/environment';
 import { PacienteService } from './paciente.service';
 
-/**
- * HU-12. Fija lo que un cambio distraido rompe sin que el compilador proteste:
- * que el alta presencial no mande credenciales —el criterio dice «sin
- * credenciales de acceso»— y que el consentimiento viaje con su version, que es
- * lo que RNF-06 obliga a registrar.
- */
 const PACIENTES = `${environment.apiUrl}/api/v1/pacientes`;
 
 describe('PacienteService', () => {
@@ -47,7 +41,6 @@ describe('PacienteService', () => {
     expect(cuerpo['documento']).toBe('71234567');
     expect(cuerpo['consentimientoAceptado']).toBe(true);
     expect(cuerpo['versionConsentimiento']).toBe('1.0');
-    // Ni correo ni contraseña: este paciente no tiene cuenta.
     expect(cuerpo['correo']).toBeUndefined();
     expect(cuerpo['password']).toBeUndefined();
   });
@@ -61,7 +54,6 @@ describe('PacienteService', () => {
     expect(req.request.params.get('size')).toBe('50');
   });
 
-  /** Para el servidor un parametro vacio no significa «todos». */
   it('HU-13: el termino en blanco viaja ausente, no vacio', () => {
     servicio.buscar('   ').subscribe();
 
@@ -69,11 +61,6 @@ describe('PacienteService', () => {
     expect(req.request.params.has('q')).toBe(false);
   });
 
-  /**
-   * Es un PUT, no un PATCH: el servidor reemplaza lo editable, de modo que un
-   * telefono ausente borra el que hubiera. Y nunca manda documento, porque RN-10
-   * lo declara la identidad del paciente.
-   */
   it('HU-13: la correccion de la ficha es un PUT sin documento', () => {
     servicio
       .actualizar('fic-1', { nombres: 'Rosa', apellidos: 'Huaman', alergias: 'Penicilina' })

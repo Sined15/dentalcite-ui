@@ -7,7 +7,14 @@ import { MatListModule } from '@angular/material/list';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import {
+  IsActiveMatchOptions,
+  NavigationEnd,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
 import { filter, map } from 'rxjs';
 import { AuthService } from './core/auth/auth.service';
 import { Rol } from './models';
@@ -17,26 +24,32 @@ interface EntradaMenuHija {
   etiqueta: string;
 }
 
-/**
- * Una entrada del cajon de navegacion.
- *
- * `ruta` es `null` cuando la entrada es un grupo: la cabecera despliega a sus
- * hijos y no lleva a ninguna parte por si misma, porque llevar a un sitio *y*
- * abrir un submenu son dos respuestas distintas al mismo clic.
- */
 interface EntradaMenu {
   ruta: string | null;
   etiqueta: string;
   icono: string;
   roles: readonly Rol[];
   hijos?: readonly EntradaMenuHija[];
+  /** Rótulo de grupo al que pertenece, por rol: el odontólogo y el paciente tienen un menú plano. */
+  grupos?: Partial<Record<Rol, string>>;
+  /** La agenda vive en /citas y «Por cerrar» cuelga de ella: sin esto se marcarían las dos. */
+  soloRutaExacta?: boolean;
 }
 
-/**
- * Rutas que se muestran sin el shell: las de acceso y, desde la revision v4, el
- * area publica, que trae su propia cabecera (`PublicoLayout`). Envolverla tambien
- * con el shell pintaria dos barras superpuestas a quien tuviera sesion abierta.
- */
+interface EntradaConRotulo extends EntradaMenu {
+  /** Solo la primera entrada de cada grupo lleva el rótulo. */
+  rotulo: string | null;
+}
+
+const RUTA_Y_SUBRUTAS: IsActiveMatchOptions = {
+  paths: 'subset',
+  queryParams: 'ignored',
+  matrixParams: 'ignored',
+  fragment: 'ignored',
+};
+
+const SOLO_RUTA_EXACTA: IsActiveMatchOptions = { ...RUTA_Y_SUBRUTAS, paths: 'exact' };
+
 const RUTAS_PUBLICAS = [
   '/login',
   '/registro',
@@ -45,84 +58,66 @@ const RUTAS_PUBLICAS = [
   '/nuestro-equipo',
 ];
 
-/** La portada es la raiz exacta: con `startsWith` casaria con todas las rutas. */
 function esRutaPublica(url: string): boolean {
   const sinParametros = url.split('?')[0];
   return sinParametros === '/' || RUTAS_PUBLICAS.some((r) => sinParametros.startsWith(r));
 }
 
-/**
- * Ancho a partir del cual el cajon de navegacion cabe junto al contenido.
- *
- * 56.25rem = 900 px: por debajo, las 15rem del cajon se comen la mitad util de
- * un movil, asi que pasa a superponerse y arranca cerrado.
- */
 const ANCHO_ESCRITORIO = '(min-width: 56.25rem)';
 
-// v4: el catalogo clinico ya no es una entrada para los cuatro roles. Sus tres
-// pantallas son de mantenimiento y quedan en la consola de administracion; quien
-// solo quiere consultarlo lo tiene en las paginas publicas, sin sesion siquiera.
+const ADMINISTRACION: Partial<Record<Rol, string>> = { ADMINISTRADOR: 'ADMINISTRACIÓN' };
+const CITAS: Partial<Record<Rol, string>> = { RECEPCIONISTA: 'CITAS', ADMINISTRADOR: 'CITAS' };
+const PACIENTES: Partial<Record<Rol, string>> = {
+  RECEPCIONISTA: 'PACIENTES',
+  ADMINISTRADOR: 'PACIENTES',
+};
+const CLINICA: Partial<Record<Rol, string>> = { RECEPCIONISTA: 'CLÍNICA', ADMINISTRADOR: 'CLÍNICA' };
+
+// El orden es el del menú de cada rol, así que las entradas de un mismo grupo van juntas.
 const MENU: readonly EntradaMenu[] = [
   {
     ruta: '/usuarios',
     etiqueta: 'Cuentas de acceso',
     icono: 'manage_accounts',
     roles: ['ADMINISTRADOR'],
+    grupos: ADMINISTRACION,
   },
   {
     ruta: '/especialidades',
     etiqueta: 'Especialidades',
     icono: 'medical_services',
     roles: ['ADMINISTRADOR'],
+    grupos: ADMINISTRACION,
   },
   {
     ruta: '/tratamientos',
     etiqueta: 'Tratamientos',
     icono: 'healing',
     roles: ['ADMINISTRADOR'],
+    grupos: ADMINISTRACION,
   },
   {
     ruta: '/odontologos',
-    etiqueta: 'Odontologos',
+    etiqueta: 'Odontólogos',
     icono: 'groups',
     roles: ['ADMINISTRADOR'],
-  },
-  {
-    ruta: '/bloqueos',
-    etiqueta: 'Bloqueos de agenda',
-    icono: 'event_busy',
-    roles: ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'],
-  },
-  {
-    ruta: '/disponibilidad',
-    etiqueta: 'Disponibilidad',
-    icono: 'event_available',
-    // Sin el odontologo: consultar franjas es el paso previo a reservarlas, y el
-    // no reserva. Su jornada la ve en la agenda.
-    roles: ['PACIENTE', 'RECEPCIONISTA', 'ADMINISTRADOR'],
-  },
-  {
-    ruta: '/pacientes',
-    etiqueta: 'Pacientes',
-    icono: 'groups_2',
-    roles: ['RECEPCIONISTA', 'ADMINISTRADOR', 'ODONTOLOGO'],
+    grupos: ADMINISTRACION,
   },
   {
     ruta: '/citas',
     etiqueta: 'Agenda',
     icono: 'event_note',
     roles: ['RECEPCIONISTA', 'ADMINISTRADOR'],
+    soloRutaExacta: true,
+    grupos: CITAS,
   },
-  // La misma ruta con otro rotulo: para el odontologo no es «la agenda» sino la
-  // suya, que es lo unico que el servidor le devuelve.
   {
     ruta: '/citas',
     etiqueta: 'Mi agenda',
     icono: 'event_note',
     roles: ['ODONTOLOGO'],
+    soloRutaExacta: true,
   },
-  // Su propio horario, al que hasta ahora no habia forma de llegar: la pantalla
-  // cuelga del listado de odontologos, que es de administracion.
   {
     ruta: '/mis-horarios',
     etiqueta: 'Mis horarios',
@@ -134,14 +129,34 @@ const MENU: readonly EntradaMenu[] = [
     etiqueta: 'Por cerrar',
     icono: 'fact_check',
     roles: ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'],
+    grupos: CITAS,
   },
-  // Cómo van los tratamientos de sus pacientes, sin tener que abrir las fichas
-  // una por una.
+  {
+    ruta: '/disponibilidad',
+    etiqueta: 'Disponibilidad',
+    icono: 'event_available',
+    roles: ['PACIENTE', 'RECEPCIONISTA', 'ADMINISTRADOR'],
+    grupos: CITAS,
+  },
   {
     ruta: '/seguimiento',
     etiqueta: 'Seguimiento de tratamientos',
     icono: 'insights',
     roles: ['ODONTOLOGO'],
+  },
+  {
+    ruta: '/pacientes',
+    etiqueta: 'Pacientes',
+    icono: 'groups_2',
+    roles: ['RECEPCIONISTA', 'ADMINISTRADOR', 'ODONTOLOGO'],
+    grupos: PACIENTES,
+  },
+  {
+    ruta: '/bloqueos',
+    etiqueta: 'Bloqueos de agenda',
+    icono: 'event_busy',
+    roles: ['ODONTOLOGO', 'RECEPCIONISTA', 'ADMINISTRADOR'],
+    grupos: CLINICA,
   },
   {
     ruta: null,
@@ -185,6 +200,25 @@ export class App {
   protected readonly rol = this.auth.rol;
   protected readonly estaAutenticado = this.auth.estaAutenticado;
 
+  /** Barra inferior del paciente en pantallas estrechas: los cuatro sitios a los que vuelve. */
+  protected readonly pestanas = [
+    { ruta: '/disponibilidad', etiqueta: 'Pedir cita', icono: 'event_available' },
+    { ruta: '/mis-citas', etiqueta: 'Mis citas', icono: 'event_note' },
+    { ruta: '/mis-tratamientos', etiqueta: 'Tratamientos', icono: 'healing' },
+    { ruta: '/mis-citas/historial', etiqueta: 'Historial', icono: 'history' },
+  ];
+
+  protected readonly etiquetaDeRol = computed(() => {
+    const etiquetas: Record<string, string> = {
+      ADMINISTRADOR: 'Administración',
+      RECEPCIONISTA: 'Recepción',
+      ODONTOLOGO: 'Odontología',
+      PACIENTE: 'Paciente',
+    };
+    const rol = this.rol();
+    return rol ? (etiquetas[rol] ?? rol) : '';
+  });
+
   private readonly url = toSignal(
     this.router.events.pipe(
       filter((e): e is NavigationEnd => e instanceof NavigationEnd),
@@ -193,29 +227,17 @@ export class App {
     { initialValue: this.router.url },
   );
 
-  /** El shell no envuelve las pantallas de acceso. */
   protected readonly mostrarShell = computed(
     () => this.estaAutenticado() && !esRutaPublica(this.url()),
   );
 
-  /**
-   * `initialValue` se resuelve con `isMatched` y no con un `false` fijo: el
-   * observable emite despues del primer render, y arrancar suponiendo movil
-   * hacia que en escritorio el cajon apareciese cerrado y saltase a abierto.
-   */
   protected readonly esEscritorio = toSignal(
     this.puntosDeCorte.observe(ANCHO_ESCRITORIO).pipe(map((estado) => estado.matches)),
     { initialValue: this.puntosDeCorte.isMatched(ANCHO_ESCRITORIO) },
   );
 
-  /** `side` reserva su ancho junto al contenido; `over` lo superpone con velo. */
   protected readonly modoCajon = computed(() => (this.esEscritorio() ? 'side' : 'over'));
 
-  /**
-   * Estado abierto/cerrado del cajon. Es propio y no derivado, porque el usuario
-   * lo alterna con el boton de la barra; el efecto de abajo solo lo reajusta
-   * cuando se cruza el punto de corte (girar el movil, redimensionar).
-   */
   protected readonly cajonAbierto = signal(this.puntosDeCorte.isMatched(ANCHO_ESCRITORIO));
 
   constructor() {
@@ -223,8 +245,6 @@ export class App {
       this.cajonAbierto.set(this.esEscritorio());
     });
 
-    // Superpuesto, el cajon tapa el contenido: navegar sin cerrarlo dejaria al
-    // usuario mirando el menu en vez de la pantalla que acaba de pedir.
     effect(() => {
       this.url();
       if (!this.esEscritorio()) {
@@ -232,9 +252,6 @@ export class App {
       }
     });
 
-    // Un grupo se abre solo cuando la pantalla actual es de uno de sus hijos, y
-    // nunca se cierra solo: entrar directo al historial —por recarga o por un
-    // enlace— con el grupo plegado dejaria el menu contradiciendo a la pantalla.
     effect(() => {
       const actual = this.url();
       const abrir = MENU.filter((entrada) =>
@@ -252,17 +269,24 @@ export class App {
     });
   }
 
-  /**
-   * El menu se filtra con la misma tabla de roles que usan los guards: una
-   * entrada visible que devolviera 403 al pulsarla seria un fallo de diseno.
-   * Ocultarla no sustituye al guard — hacen falta los dos.
-   */
-  protected readonly entradas = computed<EntradaMenu[]>(() => {
+  protected readonly entradas = computed<EntradaConRotulo[]>(() => {
     const rol = this.rol();
-    return rol ? MENU.filter((e) => e.roles.includes(rol)) : [];
+    if (!rol) {
+      return [];
+    }
+    let anterior: string | undefined;
+    return MENU.filter((e) => e.roles.includes(rol)).map((entrada) => {
+      const grupo = entrada.grupos?.[rol];
+      const rotulo = grupo && grupo !== anterior ? grupo : null;
+      anterior = grupo;
+      return { ...entrada, rotulo };
+    });
   });
 
-  /** Grupos desplegados, por etiqueta. Arrancan cerrados. */
+  protected opcionesDeActivo(entrada: EntradaMenu): IsActiveMatchOptions {
+    return entrada.soloRutaExacta ? SOLO_RUTA_EXACTA : RUTA_Y_SUBRUTAS;
+  }
+
   protected readonly gruposAbiertos = signal<ReadonlySet<string>>(new Set());
 
   protected estaAbierto(entrada: EntradaMenu): boolean {
@@ -279,11 +303,6 @@ export class App {
     });
   }
 
-  /**
-   * La cabecera del grupo se resalta cuando lo esta uno de sus hijos. No lo hace
-   * `routerLinkActive` porque la cabecera es un boton, no un enlace, y plegado el
-   * grupo no quedaria ni rastro de donde esta el usuario.
-   */
   protected grupoActivo(entrada: EntradaMenu): boolean {
     const actual = this.url();
     return entrada.hijos?.some((hijo) => actual === hijo.ruta) ?? false;

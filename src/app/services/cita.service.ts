@@ -16,39 +16,17 @@ import {
 } from '../models';
 import { buildPageParams } from './pagination.util';
 
-/**
- * Citas: reserva desde el portal (HU-09 · RF-15) y desde recepcion en nombre de
- * un paciente (HU-14 · RF-17), agenda de recepcion (HU-11 · RF-18, RF-20,
- * RF-21), citas propias del paciente (HU-15 · RF-18, RF-19) y cierre de la cita
- * (HU-16 · RF-22).
- *
- * Respuestas que hay que distinguir: 422 si la franja incumple la ventana de
- * reserva (RN-05) y 409 si la cuota de citas activas esta agotada (RN-07), si la
- * franja dejo de estar disponible, o si se intenta cancelar algo que ya no esta
- * CONFIRMADO.
- */
 @Injectable({ providedIn: 'root' })
 export class CitaService {
   private readonly http = inject(HttpClient);
   private readonly url = `${environment.apiUrl}/api/v1/citas`;
 
-  /**
-   * HU-09 · PACIENTE para si mismo (sin `pacienteId`) y HU-14 · RECEPCIONISTA o
-   * ADMINISTRADOR en nombre de un paciente (con `pacienteId`).
-   */
   reservar(body: CitaRequest): Observable<Cita> {
     return this.http.post<Cita>(this.url, body);
   }
 
-  /**
-   * HU-11 · RECEPCIONISTA y ADMINISTRADOR.
-   *
-   * El orden por hora lo pone el servidor por defecto, asi que no se manda:
-   * mandarlo aqui obligaria a mantener las dos copias de acuerdo.
-   */
   listar(filtros: CitaQuery, pagina: PageQuery = {}): Observable<PageResponse<CitaResumen>> {
     let params = buildPageParams(pagina).set('desde', filtros.desde).set('hasta', filtros.hasta);
-    // Ausente, no vacio: un parametro vacio no significa «todos» para el servidor.
     if (filtros.odontologoId) {
       params = params.set('odontologoId', filtros.odontologoId);
     }
@@ -58,17 +36,8 @@ export class CitaService {
     return this.http.get<PageResponse<CitaResumen>>(this.url, { params });
   }
 
-  /**
-   * HU-15 · RF-18 · PACIENTE: sus propias citas, futuras y pasadas.
-   *
-   * El rango es **opcional**, al reves que en `listar`: el criterio pide ver las
-   * futuras y las pasadas, asi que omitirlo significa «todas». La ficha no
-   * viaja: el servidor la saca del token, de modo que no hay forma de pedir las
-   * de otro.
-   */
   mias(filtros: MisCitasQuery = {}, pagina: PageQuery = {}): Observable<PageResponse<CitaResumen>> {
     let params = buildPageParams(pagina);
-    // Ausente, no vacio: un parametro vacio no significa «todos».
     if (filtros.desde) {
       params = params.set('desde', filtros.desde);
     }
@@ -81,42 +50,22 @@ export class CitaService {
     return this.http.get<PageResponse<CitaResumen>>(`${this.url}/mias`, { params });
   }
 
-  /**
-   * HU-11 · RF-20 · RECEPCIONISTA y ADMINISTRADOR, sin ventana: cancelan incluso
-   * a ultima hora. HU-15 · RF-19 · PACIENTE, solo la suya y dentro de la ventana
-   * de RN-06; fuera de ella el servidor responde 422 y dice que hay que llamar a
-   * recepcion.
-   */
   cancelar(id: string, motivo: string): Observable<Cita> {
     const body: CancelacionRequest = { motivo };
     return this.http.patch<Cita>(`${this.url}/${id}/cancelar`, body);
   }
 
-  /**
-   * HU-16 · RF-22 · RECEPCIONISTA, ADMINISTRADOR y ODONTOLOGO: las citas
-   * confirmadas cuya hora de fin ya paso y siguen sin resultado.
-   *
-   * Sin filtros: quien ve que lo decide el rol en el servidor —el odontologo
-   * solo las suyas—, no un parametro que el cliente pudiera cambiar.
-   */
   pendientesDeCierre(pagina: PageQuery = {}): Observable<PageResponse<CitaResumen>> {
     return this.http.get<PageResponse<CitaResumen>>(`${this.url}/pendientes-cierre`, {
       params: buildPageParams(pagina),
     });
   }
 
-  /**
-   * HU-16 · RF-22. La cita pasa a ATENDIDA o NO_ASISTIO, sin retorno (RN-09).
-   *
-   * Respuestas que hay que distinguir: 409 si la cita ya esta en un estado final
-   * o si **todavia no ha terminado**, y 403 si es de otro odontologo.
-   */
   registrarResultado(id: string, resultado: ResultadoCita): Observable<Cita> {
     const body: ResultadoRequest = { resultado };
     return this.http.patch<Cita>(`${this.url}/${id}/resultado`, body);
   }
 
-  /** HU-11 · RF-21. Las transiciones de la cita, en orden cronologico. */
   historial(id: string): Observable<CitaHistorial[]> {
     return this.http.get<CitaHistorial[]>(`${this.url}/${id}/historial`);
   }

@@ -9,11 +9,6 @@ import { PageResponse } from '../../core/http/api.types';
 import { Odontologo, Usuario } from '../../models';
 import { misHorariosGuard } from './mis-horarios.guard';
 
-/**
- * El atajo del odontólogo a su propio horario. La API ya lo permitía; lo que
- * faltaba era traducir «yo» a «mi registro de odontólogo», que es exactamente lo
- * que esta guarda hace.
- */
 
 const API_USUARIOS = `${environment.apiUrl}/api/v1/usuarios/me`;
 const API_ODONTOLOGOS = `${environment.apiUrl}/api/v1/odontologos`;
@@ -58,7 +53,6 @@ describe('misHorariosGuard', () => {
 
   afterEach(() => localStorage.clear());
 
-  /** Lanza la guarda y espera su veredicto, que aquí siempre es asíncrono. */
   function lanzar(): Promise<UrlTree> {
     const resultado = TestBed.runInInjectionContext(() =>
       misHorariosGuard({} as ActivatedRouteSnapshot, {} as RouterStateSnapshot),
@@ -83,8 +77,6 @@ describe('misHorariosGuard', () => {
   });
 
   it('una cuenta sin ficha no tiene registro que abrir', async () => {
-    // Es la misma situación que el servidor rechaza con 403 en la agenda: sin
-    // ficha no hay «lo suyo». Enseñarlo es mejor que una pantalla en blanco.
     const veredicto = lanzar();
     responderCon({ fichaId: null }, []);
 

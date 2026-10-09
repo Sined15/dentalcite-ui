@@ -23,7 +23,6 @@ export class EspecialidadService {
     return this.http.put<Especialidad>(`${this.url}/${id}`, body);
   }
 
-  /** Baja logica: PATCH sin cuerpo devuelve 204. No existe DELETE. */
   darDeBaja(id: string): Observable<void> {
     return this.http.patch<void>(`${this.url}/${id}`, null);
   }

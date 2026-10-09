@@ -14,16 +14,6 @@ import { mensajeDeError } from '../../core/http/api-error';
 import { Paciente } from '../../models';
 import { PacienteService } from '../../services/paciente.service';
 
-/**
- * HU-13 · RF-07: la búsqueda de pacientes, para el personal.
- *
- * La paginación es del **servidor**, no como en los catálogos: el padrón de
- * pacientes crece sin techo, y traerlo entero para filtrar en cliente —lo que
- * hace `cargarTodasLasPaginas`— es justo el atajo que RNF-02 mide y descarta.
- *
- * El odontólogo ve esta misma pantalla, pero el servidor le devuelve solo a las
- * personas a las que ha atendido (RNF-06); aquí no hay nada que filtrar.
- */
 @Component({
   selector: 'app-paciente-list',
   imports: [
@@ -39,9 +29,12 @@ import { PacienteService } from '../../services/paciente.service';
   ],
   template: `
     <div class="cabecera">
-      <h1>Pacientes</h1>
+      <div class="dc-titular">
+        <h1>Pacientes</h1>
+        <p class="dc-subtitulo">Busca por nombre, documento o número de historia.</p>
+      </div>
       @if (puedeRegistrar()) {
-        <a mat-flat-button color="primary" routerLink="/pacientes/nuevo">
+        <a mat-flat-button routerLink="/pacientes/nuevo">
           <mat-icon>person_add</mat-icon>
           Registrar paciente
         </a>
@@ -64,11 +57,11 @@ import { PacienteService } from '../../services/paciente.service';
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de pacientes">
+    <div class="tabla-scroll tabla-apilable" tabindex="0" role="region" aria-label="Tabla de pacientes">
       <table mat-table [dataSource]="pacientes()">
         <ng-container matColumnDef="paciente">
           <th mat-header-cell *matHeaderCellDef>Paciente</th>
-          <td mat-cell *matCellDef="let fila">
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Paciente">
             {{ fila.apellidos }}, {{ fila.nombres }}
             <span class="historia">{{ fila.numeroHistoria }}</span>
           </td>
@@ -76,31 +69,40 @@ import { PacienteService } from '../../services/paciente.service';
 
         <ng-container matColumnDef="documento">
           <th mat-header-cell *matHeaderCellDef>Documento</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.tipoDocumento }} {{ fila.documento }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Documento">{{ fila.tipoDocumento }} {{ fila.documento }}</td>
         </ng-container>
 
         <ng-container matColumnDef="telefono">
           <th mat-header-cell *matHeaderCellDef>Teléfono</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.telefono || '—' }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Teléfono">{{ fila.telefono || '—' }}</td>
         </ng-container>
 
         <ng-container matColumnDef="cuenta">
           <th mat-header-cell *matHeaderCellDef>Cuenta</th>
-          <td mat-cell *matCellDef="let fila">
-            {{ fila.tieneCuenta ? 'Sí' : 'No' }}
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Cuenta">
+            <span
+              class="dc-estado"
+              [class.dc-estado--ok]="fila.tieneCuenta"
+              [class.sin-cuenta]="!fila.tieneCuenta"
+            >
+              <mat-icon aria-hidden="true">{{ fila.tieneCuenta ? 'check_circle' : 'person_off' }}</mat-icon>
+              {{ fila.tieneCuenta ? 'Con cuenta' : 'Sin cuenta' }}
+            </span>
           </td>
         </ng-container>
 
         <ng-container matColumnDef="acciones">
           <th mat-header-cell *matHeaderCellDef class="col-acciones">Ficha</th>
-          <td mat-cell *matCellDef="let fila" class="col-acciones">
+          <td mat-cell *matCellDef="let fila" class="col-acciones" data-etiqueta="Ficha">
             <button
-              mat-icon-button
+              mat-stroked-button
+              class="dc-accion"
               type="button"
               (click)="abrirFicha(fila)"
               [attr.aria-label]="'Abrir la ficha de ' + fila.apellidos + ', ' + fila.nombres"
             >
-              <mat-icon>folder_shared</mat-icon>
+              Ver ficha
+              <mat-icon iconPositionEnd>chevron_right</mat-icon>
             </button>
           </td>
         </ng-container>
@@ -111,7 +113,13 @@ import { PacienteService } from '../../services/paciente.service';
     </div>
 
     @if (!cargando() && pacientes().length === 0) {
-      <p class="vacio">No hay pacientes que coincidan con la búsqueda.</p>
+      <p class="dc-vacio">
+        <mat-icon aria-hidden="true">search_off</mat-icon>
+        <span>
+          No hay pacientes que coincidan con la búsqueda. Prueba con otro nombre, documento o
+          número de historia.
+        </span>
+      </p>
     }
 
     <mat-paginator
@@ -124,6 +132,9 @@ import { PacienteService } from '../../services/paciente.service';
     />
   `,
   styles: `
+    .dc-accion {
+      white-space: nowrap;
+    }
     .buscador {
       width: 100%;
       max-width: 34rem;
@@ -133,19 +144,21 @@ import { PacienteService } from '../../services/paciente.service';
     }
     .historia {
       display: block;
-      font-size: 0.75rem;
-      color: var(--mat-sys-on-surface-variant, #49454f);
+      font: var(--text-code);
+      color: var(--ink-muted);
+    }
+    .sin-cuenta {
+      color: var(--ink-muted);
     }
     .col-acciones {
-      width: 5rem;
+      width: 10rem;
       text-align: right;
     }
-    .vacio,
     .error {
       margin: 1rem 0;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
   `,
 })
@@ -165,15 +178,12 @@ export class PacienteList {
 
   protected readonly formulario = this.fb.nonNullable.group({ q: [''] });
 
-  /** El alta es de recepción y administración (RF-06); el odontólogo solo busca. */
   protected puedeRegistrar(): boolean {
     const rol = this.auth.rol();
     return rol === 'RECEPCIONISTA' || rol === 'ADMINISTRADOR';
   }
 
   constructor() {
-    // Cada tecla es una consulta al servidor: sin la espera, escribir un
-    // apellido de ocho letras lanza ocho busquedas y solo importa la ultima.
     this.formulario.controls.q.valueChanges.pipe(debounceTime(300)).subscribe(() => {
       this.indice.set(0);
       this.cargar();

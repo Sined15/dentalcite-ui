@@ -70,7 +70,6 @@ interface Interno {
   modoCompletar: () => boolean;
 }
 
-/** El estado que el listado de cuentas manda al venir a terminar un registro. */
 function montar(estado: Record<string, unknown> | null) {
   TestBed.configureTestingModule({
     imports: [OdontologoEdit],
@@ -118,16 +117,6 @@ function rellenarCuenta(componente: Interno): void {
   });
 }
 
-/**
- * El alta del odontólogo es de una sola pantalla. El profesional es el sujeto y
- * la cuenta lo que se le cuelga: antes había que crear la cuenta en otro menú y
- * volver aquí a elegir su ficha en un desplegable, de modo que nadie podía
- * existir como profesional hasta tener credenciales.
- *
- * Son dos llamadas y el orden es el que es —el registro exige que la ficha ya
- * tenga cuenta de rol odontólogo—, así que lo que se fija aquí es el encadenado y
- * lo que pasa cuando se rompe por la mitad.
- */
 describe('OdontologoEdit', () => {
   it('elAlta_creaLaCuentaYLuegoElRegistro_conLaFichaDeLaPrimera', () => {
     const { httpMock, componente } = montar(null);
@@ -158,11 +147,6 @@ describe('OdontologoEdit', () => {
     });
   });
 
-  /**
-   * La colegiatura repetida es la causa más probable de que falle el segundo paso,
-   * y entonces la cuenta ya estaría creada. Comprobarla contra la lista que esta
-   * pantalla ya carga evita dejar ese resto.
-   */
   it('elAlta_conUnCopYaUsado_noLlegaACrearLaCuenta', () => {
     const { httpMock, componente } = montar(null);
     rellenarProfesional(componente, 'COP-10001');
@@ -193,11 +177,6 @@ describe('OdontologoEdit', () => {
     expect(mensaje).toContain('Completar registro profesional');
   });
 
-  /**
-   * Corregir y volver a guardar es lo que hace cualquiera tras el error, y la
-   * cuenta ya existe: repetir el primer paso solo daría un conflicto por correo
-   * repetido y dejaría el alta atascada.
-   */
   it('elAlta_alReintentarTrasElFallo_noVuelveACrearLaCuenta', () => {
     const { httpMock, componente } = montar(null);
     rellenarProfesional(componente, 'COP-20002');
@@ -220,10 +199,6 @@ describe('OdontologoEdit', () => {
     expect(reintento.request.body).toMatchObject({ cop: 'COP-30003', fichaId: 'fic-ana' });
   });
 
-  /**
-   * El modo con el que se termina una cuenta que quedó a medias: la ficha llega
-   * dada y no hay credenciales que crear, porque la cuenta ya existe.
-   */
   it('elModoCompletar_conLaFichaDada_noCreaNingunaCuenta', () => {
     const { httpMock, componente } = montar({ fichaId: 'fic-ana', nombre: 'Ana Quispe' });
     expect(componente.modoCompletar()).toBe(true);
@@ -236,7 +211,6 @@ describe('OdontologoEdit', () => {
     expect(registro.request.body).toMatchObject({ fichaId: 'fic-ana' });
   });
 
-  /** Completar el registro de una ficha que ya lo tiene no es completar nada. */
   it('elModoCompletar_conUnaFichaQueYaTieneRegistro_avisaYNoLoIntenta', () => {
     const { componente } = montar({ fichaId: 'fic-perez', nombre: 'Luis Pérez' });
 

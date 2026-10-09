@@ -60,18 +60,6 @@ interface Interno {
   leFaltaRegistro: (fila: Usuario) => boolean;
 }
 
-/**
- * Lo que se fija aquí es el cruce entre esta pantalla y la de pacientes, que es
- * donde se leía mal: son dos tablas distintas —credenciales y fichas— y la única
- * forma honesta de relacionarlas es fila a fila, por la ficha de cada cuenta. El
- * odontólogo es el caso que lo prueba: tiene `fichaId` para vincular su cuenta
- * con su registro, y aun así no se le enlaza, porque el padrón de pacientes ya
- * no considera suya esa ficha.
- *
- * Y lo segundo, el aviso de la cuenta a medias: la de odontólogo que no resuelve
- * a ningún registro profesional puede iniciar sesión y no puede ejercer nada de
- * lo suyo, y eso desde la tabla no se veía.
- */
 describe('UsuarioList', () => {
   let fixture: ComponentFixture<UsuarioList>;
   let httpMock: HttpTestingController;
@@ -114,17 +102,9 @@ describe('UsuarioList', () => {
     const enlaces = [...raiz.querySelectorAll('a[href^="/pacientes/"]')];
     expect(enlaces.map((e) => e.getAttribute('href'))).toEqual(['/pacientes/fic-rosa']);
 
-    // Administracion y recepcion no necesitan historia clinica; el odontologo la
-    // tiene pero no es una historia que consultar. El guion es un dato, no un
-    // hueco por cargar.
     expect(raiz.querySelectorAll('.sin-ficha')).toHaveLength(2);
   });
 
-  /**
-   * El caso que obliga a mirar el rol y no solo `fichaId`: el odontólogo trae
-   * ficha —vincula su cuenta con su registro— pero el servidor la da por
-   * inexistente como paciente, así que enlazarla sería mandar a un 404.
-   */
   it('el odontologo trae ficha y aun asi no se le enlaza', async () => {
     montar(CUENTAS, [registro('fic-luis')]);
     await fixture.whenStable();
@@ -169,11 +149,6 @@ describe('UsuarioList', () => {
     );
   });
 
-  /**
-   * El ascenso de rol no crea ficha, así que una cuenta que nunca la tuvo puede
-   * acabar como odontólogo sin nada contra lo que registrar. Se marca igual
-   * —tampoco puede ejercer—, pero la acción de completarlo no tiene sentido.
-   */
   it('laCuentaDeOdontologo_sinFicha_seMarcaIgual', async () => {
     const sinFicha = cuenta('Carmen', 'ODONTOLOGO', null);
     montar([sinFicha], []);

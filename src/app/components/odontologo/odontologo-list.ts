@@ -1,6 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -8,8 +7,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeError } from '../../core/http/api-error';
@@ -17,38 +16,62 @@ import { Odontologo } from '../../models';
 import { OdontologoService } from '../../services/odontologo.service';
 import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
 import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo';
+import { visualDeEspecialidad } from '../../shared/especialidad-visual';
 
 @Component({
   selector: 'app-odontologo-list',
   imports: [
     RouterLink,
     MatButtonModule,
-    MatChipsModule,
     MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatPaginatorModule,
     MatProgressBarModule,
+    MatSelectModule,
     MatTableModule,
-    MatTooltipModule,
   ],
   template: `
     <header class="cabecera">
-      <h1>Odontólogos</h1>
+      <div class="dc-titular">
+        <h1>Odontólogos</h1>
+        <p class="dc-subtitulo">
+          El equipo clínico: su registro profesional y las especialidades que ejerce.
+        </p>
+      </div>
       @if (puedeEscribir()) {
-        <a mat-flat-button color="primary" routerLink="/odontologos/nuevo">
+        <a mat-flat-button routerLink="/odontologos/nuevo">
           <mat-icon>add</mat-icon>
-          Registrar odontologo
+          Registrar odontólogo
         </a>
       }
     </header>
 
-    <mat-form-field appearance="outline" class="filtro">
-      <mat-label>Filtrar por nombre o COP</mat-label>
-      <input matInput #entrada [value]="filtro()" (input)="filtro.set(entrada.value)" />
-      <mat-icon matSuffix>search</mat-icon>
-    </mat-form-field>
+    <form class="dc-filtros" role="search" aria-label="Filtros de odontólogos">
+      <mat-form-field appearance="outline">
+        <mat-label>Buscar por nombre o COP</mat-label>
+        <input matInput #entrada [value]="filtro()" (input)="filtro.set(entrada.value)" />
+        <mat-icon matSuffix>search</mat-icon>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Especialidad</mat-label>
+        <mat-select [value]="especialidad()" (selectionChange)="especialidad.set($event.value)">
+          <mat-option value="">Todas</mat-option>
+          @for (nombre of especialidades(); track nombre) {
+            <mat-option [value]="nombre">{{ nombre }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Estado</mat-label>
+        <mat-select [value]="estado()" (selectionChange)="estado.set($event.value)">
+          <mat-option value="">Todos</mat-option>
+          <mat-option value="activo">Activo</mat-option>
+          <mat-option value="baja">De baja</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </form>
 
     @if (cargando()) {
       <mat-progress-bar mode="indeterminate" aria-label="Cargando odontólogos" />
@@ -58,67 +81,79 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de odontólogos">
+    <div class="tabla-scroll tabla-apilable" tabindex="0" role="region" aria-label="Tabla de odontólogos">
       <table mat-table [dataSource]="pagina()">
-        <ng-container matColumnDef="cop">
-          <th mat-header-cell *matHeaderCellDef>COP</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.cop }}</td>
-        </ng-container>
-
         <ng-container matColumnDef="nombre">
-          <th mat-header-cell *matHeaderCellDef>Nombre</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.nombres }} {{ fila.apellidos }}</td>
+          <th mat-header-cell *matHeaderCellDef>Odontólogo</th>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Odontólogo">
+            <span class="dc-persona" [attr.data-spec]="principal(fila)">
+              <span class="dc-avatar" aria-hidden="true">{{ iniciales(fila) }}</span>
+              <span>
+                <b>{{ fila.nombres }} {{ fila.apellidos }}</b>
+                <small class="cop">{{ fila.cop }}</small>
+              </span>
+            </span>
+          </td>
         </ng-container>
 
         <ng-container matColumnDef="especialidades">
           <th mat-header-cell *matHeaderCellDef>Especialidades</th>
-          <td mat-cell *matCellDef="let fila">
-            <mat-chip-set>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Especialidades">
+            <span class="dc-etiquetas">
               @for (esp of fila.especialidades; track esp.id) {
-                <mat-chip>{{ esp.nombre }}</mat-chip>
+                <span class="dc-etiqueta" [attr.data-spec]="visual(esp.nombre).clave">{{
+                  esp.nombre
+                }}</span>
               } @empty {
                 <span>—</span>
               }
-            </mat-chip-set>
+            </span>
           </td>
         </ng-container>
 
         <ng-container matColumnDef="activo">
           <th mat-header-cell *matHeaderCellDef>Estado</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.activo ? 'Activo' : 'De baja' }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Estado"><span class="dc-estado" [class.dc-estado--ok]="fila.activo" [class.dc-estado--error]="!fila.activo"><mat-icon aria-hidden="true">{{ fila.activo ? 'check_circle' : 'block' }}</mat-icon>{{ fila.activo ? 'Activo' : 'De baja' }}</span></td>
         </ng-container>
 
         <ng-container matColumnDef="acciones">
           <th mat-header-cell *matHeaderCellDef class="col-acciones">Acciones</th>
           <td mat-cell *matCellDef="let fila" class="col-acciones">
-            <a
-              mat-icon-button
-              [routerLink]="['/odontologos', fila.id, 'horarios']"
-              matTooltip="Horario de atencion"
-              [attr.aria-label]="'Horario de ' + fila.nombres"
-            >
-              <mat-icon>schedule</mat-icon>
-            </a>
-            @if (puedeEscribir()) {
-              <button
-                mat-icon-button
-                type="button"
-                (click)="editar(fila)"
-                [attr.aria-label]="'Editar ' + fila.nombres"
+            <span class="dc-acciones">
+              <a
+                mat-stroked-button
+                class="dc-accion"
+                [routerLink]="['/odontologos', fila.id, 'horarios']"
+                [attr.aria-label]="'Horario de ' + fila.nombres"
               >
-                <mat-icon>edit</mat-icon>
-              </button>
-              <button
-                mat-icon-button
-                type="button"
-                color="warn"
-                [disabled]="!fila.activo"
-                (click)="darDeBaja(fila)"
-                [attr.aria-label]="'Dar de baja ' + fila.nombres"
-              >
-                <mat-icon>block</mat-icon>
-              </button>
-            }
+                <mat-icon>schedule</mat-icon>
+                Horario
+              </a>
+              @if (puedeEscribir()) {
+                <button
+                  mat-stroked-button
+                  class="dc-accion"
+                  type="button"
+                  (click)="editar(fila)"
+                  [attr.aria-label]="'Editar ' + fila.nombres"
+                >
+                  <mat-icon>edit</mat-icon>
+                  Editar
+                </button>
+                @if (fila.activo) {
+                  <button
+                    mat-stroked-button
+                    class="dc-accion dc-accion--peligro"
+                    type="button"
+                    (click)="darDeBaja(fila)"
+                    [attr.aria-label]="'Dar de baja ' + fila.nombres"
+                  >
+                    <mat-icon>do_not_disturb_on</mat-icon>
+                    Dar de baja
+                  </button>
+                }
+              }
+            </span>
           </td>
         </ng-container>
 
@@ -128,7 +163,16 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
     </div>
 
     @if (!cargando() && filas().length === 0) {
-      <p class="vacio">No hay odontólogos que mostrar.</p>
+      <p class="dc-vacio">
+        <mat-icon aria-hidden="true">search_off</mat-icon>
+        <span>
+          {{
+            hayFiltros()
+              ? 'Ningún odontólogo coincide con esos filtros. Prueba con otros o quítalos.'
+              : 'Aún no hay odontólogos registrados.'
+          }}
+        </span>
+      </p>
     }
 
     <mat-paginator
@@ -141,23 +185,19 @@ import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo
     />
   `,
   styles: `
-    .filtro {
-      width: min(100%, 22rem);
-    }
     table {
       width: 100%;
-      min-width: 46rem;
+      min-width: 56rem;
     }
     .col-acciones {
-      width: 10rem;
+      width: 22rem;
       text-align: right;
     }
-    .error {
-      color: var(--mat-sys-error, #b3261e);
+    .cop {
+      font: var(--text-code);
     }
-    .vacio {
-      padding: 1.5rem 0;
-      opacity: 0.7;
+    .error {
+      color: var(--danger-ink);
     }
   `,
 })
@@ -168,7 +208,7 @@ export class OdontologoList {
   private readonly snackBar = inject(MatSnackBar);
   private readonly router = inject(Router);
 
-  protected readonly columnas = ['cop', 'nombre', 'especialidades', 'activo', 'acciones'];
+  protected readonly columnas = ['nombre', 'especialidades', 'activo', 'acciones'];
 
   protected readonly datos = signal<Odontologo[]>([]);
   protected readonly indice = signal(0);
@@ -176,22 +216,48 @@ export class OdontologoList {
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly filtro = signal('');
+  protected readonly especialidad = signal('');
+  protected readonly estado = signal<'' | 'activo' | 'baja'>('');
+
+  protected readonly visual = visualDeEspecialidad;
 
   protected readonly puedeEscribir = computed(() => this.auth.rol() === 'ADMINISTRADOR');
 
+  protected readonly especialidades = computed(() =>
+    [...new Set(this.datos().flatMap((o) => o.especialidades.map((e) => e.nombre)))].sort((a, b) =>
+      a.localeCompare(b),
+    ),
+  );
+
+  protected readonly hayFiltros = computed(
+    () => !!(this.filtro().trim() || this.especialidad() || this.estado()),
+  );
+
   protected readonly filas = computed(() => {
     const texto = this.filtro().trim().toLowerCase();
-    const filas = [...this.datos()].sort((a, b) => a.apellidos.localeCompare(b.apellidos));
-    return texto
-      ? filas.filter(
-          (f) =>
+    const especialidad = this.especialidad();
+    const estado = this.estado();
+    return [...this.datos()]
+      .sort((a, b) => a.apellidos.localeCompare(b.apellidos))
+      .filter(
+        (f) =>
+          (!texto ||
             `${f.nombres} ${f.apellidos}`.toLowerCase().includes(texto) ||
-            f.cop.toLowerCase().includes(texto),
-        )
-      : filas;
+            f.cop.toLowerCase().includes(texto)) &&
+          (!especialidad || f.especialidades.some((e) => e.nombre === especialidad)) &&
+          (!estado || f.activo === (estado === 'activo')),
+      );
   });
 
-  /** Corte de la pagina actual sobre el conjunto ya filtrado. */
+  protected iniciales(o: Odontologo): string {
+    return (o.nombres.charAt(0) + o.apellidos.charAt(0)).toUpperCase();
+  }
+
+  /** El color del avatar es el de la primera especialidad que ejerce. */
+  protected principal(o: Odontologo): string | null {
+    return visualDeEspecialidad(o.especialidades[0]?.nombre).clave;
+  }
+
   protected readonly pagina = computed(() => {
     const desde = this.indice() * this.tamano();
     return this.filas().slice(desde, desde + this.tamano());
@@ -228,7 +294,7 @@ export class OdontologoList {
   protected darDeBaja(fila: Odontologo): void {
     const datos: ConfirmarDatos = {
       titulo: 'Dar de baja al odontólogo',
-      mensaje: `${fila.nombres} ${fila.apellidos} dejara de estar disponible. Es una baja logica: el registro se conserva.`,
+      mensaje: `${fila.nombres} ${fila.apellidos} dejará de estar disponible para reservar. Es una baja lógica: el registro se conserva.`,
       confirmar: 'Dar de baja',
       destructivo: true,
     };
@@ -245,7 +311,6 @@ export class OdontologoList {
             this.snackBar.open('Odontólogo dado de baja.', 'Cerrar', { duration: 4000 });
             this.cargar();
           },
-          // Un 409 significa que tiene citas CONFIRMADAS no vencidas (RN-09).
           error: (err: unknown) =>
             this.snackBar.open(mensajeDeError(err), 'Cerrar', { duration: 8000 }),
         });

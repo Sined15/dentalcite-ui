@@ -19,6 +19,13 @@ import { cargarTodasLasPaginas } from '../../shared/buscar-en-paginas';
 import { ConfirmarDatos, ConfirmarDialogo } from '../../shared/confirmar-dialogo';
 import { PasswordProvisionalDialogo } from './password-provisional-dialogo';
 
+const ETIQUETA_ROL: Record<Rol, string> = {
+  ADMINISTRADOR: 'Administración',
+  RECEPCIONISTA: 'Recepción',
+  ODONTOLOGO: 'Odontología',
+  PACIENTE: 'Paciente',
+};
+
 @Component({
   selector: 'app-usuario-list',
   imports: [
@@ -36,16 +43,19 @@ import { PasswordProvisionalDialogo } from './password-provisional-dialogo';
   ],
   template: `
     <header class="cabecera">
-      <h1>Cuentas de acceso</h1>
-      <a mat-flat-button color="primary" routerLink="/usuarios/nuevo">
+      <div class="dc-titular">
+        <h1>Cuentas de acceso</h1>
+        <p class="dc-subtitulo">Quién puede entrar al sistema y con qué rol.</p>
+      </div>
+      <a mat-flat-button routerLink="/usuarios/nuevo">
         <mat-icon>person_add</mat-icon>
         Nueva cuenta
       </a>
     </header>
 
-    <div class="filtros">
-      <mat-form-field appearance="outline" class="filtro">
-        <mat-label>Filtrar por nombre o correo</mat-label>
+    <form class="dc-filtros" role="search" aria-label="Filtros de cuentas">
+      <mat-form-field appearance="outline">
+        <mat-label>Buscar por nombre o correo</mat-label>
         <input matInput #entrada [value]="filtro()" (input)="filtro.set(entrada.value)" />
         <mat-icon matSuffix>search</mat-icon>
       </mat-form-field>
@@ -55,11 +65,20 @@ import { PasswordProvisionalDialogo } from './password-provisional-dialogo';
         <mat-select [value]="rol()" (valueChange)="rol.set($event)">
           <mat-option value="">Todos</mat-option>
           @for (r of roles; track r) {
-            <mat-option [value]="r">{{ r }}</mat-option>
+            <mat-option [value]="r">{{ etiquetaRol(r) }}</mat-option>
           }
         </mat-select>
       </mat-form-field>
-    </div>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Estado</mat-label>
+        <mat-select [value]="estado()" (valueChange)="estado.set($event)">
+          <mat-option value="">Todos</mat-option>
+          <mat-option value="activa">Activa</mat-option>
+          <mat-option value="desactivada">Desactivada</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </form>
 
     @if (cargando()) {
       <mat-progress-bar mode="indeterminate" aria-label="Cargando cuentas" />
@@ -69,33 +88,28 @@ import { PasswordProvisionalDialogo } from './password-provisional-dialogo';
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de cuentas">
+    <div class="tabla-scroll tabla-apilable" tabindex="0" role="region" aria-label="Tabla de cuentas">
       <table mat-table [dataSource]="pagina()">
         <ng-container matColumnDef="nombre">
-          <th mat-header-cell *matHeaderCellDef>Nombre</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.nombre }}</td>
-        </ng-container>
-
-        <ng-container matColumnDef="correo">
-          <th mat-header-cell *matHeaderCellDef>Correo</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.correo }}</td>
+          <th mat-header-cell *matHeaderCellDef>Persona</th>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Persona">
+            <span class="persona">
+              <b>{{ fila.nombre }}</b>
+              <small>{{ fila.correo }}</small>
+            </span>
+          </td>
         </ng-container>
 
         <ng-container matColumnDef="rol">
           <th mat-header-cell *matHeaderCellDef>Rol</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.rol }}</td>
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Rol">
+            <span class="rol">{{ etiquetaRol(fila.rol) }}</span>
+          </td>
         </ng-container>
 
-        <!--
-          De quien es la cuenta. Solo se enlaza la del PACIENTE, y la condicion
-          lleva el rol a proposito: el odontologo **tiene** fichaId —vincula su
-          cuenta con su registro— pero esa ficha no es una historia clinica y el
-          servidor la da por inexistente como paciente. Enlazar mirando solo el
-          identificador de ficha llevaria a un 404.
-        -->
         <ng-container matColumnDef="ficha">
           <th mat-header-cell *matHeaderCellDef>Ficha</th>
-          <td mat-cell *matCellDef="let fila">
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Ficha">
             @if (fila.fichaId && fila.rol === 'PACIENTE') {
               <a
                 [routerLink]="['/pacientes', fila.fichaId]"
@@ -108,18 +122,17 @@ import { PasswordProvisionalDialogo } from './password-provisional-dialogo';
           </td>
         </ng-container>
 
-<!--
-          La cuenta de odontologo a medias. Sin registro profesional puede iniciar
-          sesion, pero no declarar su horario, ver su agenda ni cerrar sus citas:
-          todo eso resuelve por el registro, y sin el responde 403. El alta de
-          «Odontologos» crea las dos mitades juntas, asi que esto queda para las
-          cuentas antiguas, para el ascenso de rol —que no crea registro— y para el
-          alta cuyo segundo paso fallo.
-        -->
         <ng-container matColumnDef="estado">
           <th mat-header-cell *matHeaderCellDef>Estado</th>
-          <td mat-cell *matCellDef="let fila">
-            {{ fila.activo ? 'Activa' : 'Desactivada' }}
+          <td mat-cell *matCellDef="let fila" data-etiqueta="Estado">
+            <span
+              class="dc-estado"
+              [class.dc-estado--ok]="fila.activo"
+              [class.dc-estado--error]="!fila.activo"
+            >
+              <mat-icon aria-hidden="true">{{ fila.activo ? 'check_circle' : 'block' }}</mat-icon>
+              {{ fila.activo ? 'Activa' : 'Desactivada' }}
+            </span>
             @if (fila.requiereCambioPassword) {
               <span class="marca">Contraseña provisional</span>
             }
@@ -132,19 +145,27 @@ import { PasswordProvisionalDialogo } from './password-provisional-dialogo';
         <ng-container matColumnDef="acciones">
           <th mat-header-cell *matHeaderCellDef class="col-acciones">Acciones</th>
           <td mat-cell *matCellDef="let fila" class="col-acciones">
-            <button
-              mat-icon-button
-              type="button"
-              [matMenuTriggerFor]="menu"
-              [attr.aria-label]="'Acciones sobre ' + fila.nombre"
-            >
-              <mat-icon>more_vert</mat-icon>
-            </button>
-            <mat-menu #menu="matMenu">
-              <button mat-menu-item type="button" (click)="editar(fila)">
+            <span class="dc-acciones">
+              <button
+                mat-stroked-button
+                class="dc-accion"
+                type="button"
+                (click)="editar(fila)"
+                [attr.aria-label]="'Editar ' + fila.nombre"
+              >
                 <mat-icon>edit</mat-icon>
-                <span>Editar</span>
+                Editar
               </button>
+              <button
+                mat-icon-button
+                type="button"
+                [matMenuTriggerFor]="menu"
+                [attr.aria-label]="'Más acciones sobre ' + fila.nombre"
+              >
+                <mat-icon>more_vert</mat-icon>
+              </button>
+            </span>
+            <mat-menu #menu="matMenu">
               <button mat-menu-item type="button" (click)="asignarPassword(fila)">
                 <mat-icon>key</mat-icon>
                 <span>Contraseña provisional</span>
@@ -174,7 +195,16 @@ import { PasswordProvisionalDialogo } from './password-provisional-dialogo';
     </div>
 
     @if (!cargando() && filas().length === 0) {
-      <p class="vacio">No hay cuentas que mostrar.</p>
+      <p class="dc-vacio">
+        <mat-icon aria-hidden="true">search_off</mat-icon>
+        <span>
+          {{
+            hayFiltros()
+              ? 'Ninguna cuenta coincide con esos filtros. Prueba con otros o quítalos.'
+              : 'Aún no hay cuentas.'
+          }}
+        </span>
+      </p>
     }
 
     <mat-paginator
@@ -187,46 +217,57 @@ import { PasswordProvisionalDialogo } from './password-provisional-dialogo';
     />
   `,
   styles: `
-    .filtro {
-      width: min(100%, 22rem);
-    }
-    .filtros {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      align-items: flex-start;
-    }
     table {
       width: 100%;
       min-width: 46rem;
     }
     .col-acciones {
-      width: 5rem;
+      width: 11rem;
       text-align: right;
+    }
+    .dc-acciones {
+      flex-wrap: nowrap;
+    }
+    .persona b {
+      display: block;
+      font-weight: 500;
+    }
+    .persona small {
+      display: block;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .rol {
+      display: inline-flex;
+      align-items: center;
+      height: 1.75rem;
+      padding: 0 var(--space-3);
+      border-radius: var(--radius-pill);
+      background: var(--surface-sunken);
+      font: var(--text-label);
     }
     .marca {
       display: inline-block;
       margin-left: 0.5rem;
       padding: 0.1rem 0.5rem;
-      border-radius: 1rem;
-      font-size: 0.7rem;
-      background: var(--mat-sys-surface-container-highest, #e2e2e6);
+      border-radius: var(--radius-pill);
+      font: var(--text-label);
+      background: var(--surface-sunken);
+      color: var(--ink);
     }
     .alerta {
-      background: var(--mat-sys-error-container, #f9dedc);
-      color: var(--mat-sys-on-error-container, #410e0b);
+      background: var(--surface);
+      border: 1px solid var(--warning);
+      color: var(--warning-ink);
     }
     .sin-ficha {
       opacity: 0.55;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
-    }
-    .vacio {
-      padding: 1.5rem 0;
-      opacity: 0.7;
+      color: var(--danger-ink);
     }
   `,
+
 })
 export class UsuarioList {
   private readonly servicio = inject(UsuarioService);
@@ -235,7 +276,7 @@ export class UsuarioList {
   private readonly snackBar = inject(MatSnackBar);
   private readonly router = inject(Router);
 
-  protected readonly columnas = ['nombre', 'correo', 'rol', 'ficha', 'estado', 'acciones'];
+  protected readonly columnas = ['nombre', 'rol', 'ficha', 'estado', 'acciones'];
 
   protected readonly datos = signal<Usuario[]>([]);
   protected readonly indice = signal(0);
@@ -246,28 +287,29 @@ export class UsuarioList {
 
   protected readonly roles = ROLES;
 
-  /**
-   * Separa las cuentas del personal de las del paciente, que es lo que se quiere
-   * mirar al abrir esta lista junto a la de pacientes. El cruce con «Cuenta = Sí»
-   * de aquella se hace fila a fila, por la columna Ficha, y no contando: hay
-   * cuentas antiguas de recepción y administración que llevan ficha, porque el
-   * alta la creaba cuando se le indicaba un documento.
-   */
   protected readonly rol = signal<Rol | ''>('');
+  protected readonly estado = signal<'' | 'activa' | 'desactivada'>('');
 
-  /**
-   * Las fichas que tienen registro de odontólogo. Se carga una vez y de una sola
-   * consulta para toda la tabla: preguntarlo por fila sería una consulta por
-   * cuenta.
-   */
+  protected readonly hayFiltros = computed(
+    () => !!(this.filtro().trim() || this.rol() || this.estado()),
+  );
+
+  protected etiquetaRol(rol: Rol): string {
+    return ETIQUETA_ROL[rol] ?? rol;
+  }
+
   private readonly fichasConRegistro = signal<ReadonlySet<string>>(new Set());
 
   protected readonly filas = computed(() => {
     const texto = this.filtro().trim().toLowerCase();
     const rol = this.rol();
+    const estado = this.estado();
     let filas = [...this.datos()].sort((a, b) => a.nombre.localeCompare(b.nombre));
     if (rol) {
       filas = filas.filter((f) => f.rol === rol);
+    }
+    if (estado) {
+      filas = filas.filter((f) => f.activo === (estado === 'activa'));
     }
     return texto
       ? filas.filter(
@@ -277,7 +319,6 @@ export class UsuarioList {
       : filas;
   });
 
-  /** Corte de la pagina actual sobre el conjunto ya filtrado. */
   protected readonly pagina = computed(() => {
     const desde = this.indice() * this.tamano();
     return this.filas().slice(desde, desde + this.tamano());
@@ -289,18 +330,11 @@ export class UsuarioList {
     cargarTodasLasPaginas((pagina) =>
       this.odontologoService.listar({ page: pagina, size: 100 }),
     ).subscribe({
-      // Sin esta lista no se puede afirmar que a una cuenta le falte el registro,
-      // y marcarla por si acaso sería peor que no marcarla.
       next: (lista) => this.fichasConRegistro.set(new Set(lista.map((o) => o.fichaId))),
       error: () => this.fichasConRegistro.set(new Set()),
     });
   }
 
-  /**
-   * La cuenta de odontólogo que no resuelve a ningún registro profesional,
-   * incluida la que ni siquiera tiene ficha —el ascenso de rol no la crea—, que
-   * es la que no se puede completar desde aquí.
-   */
   protected leFaltaRegistro(fila: Usuario): boolean {
     if (fila.rol !== 'ODONTOLOGO') {
       return false;
@@ -338,11 +372,10 @@ export class UsuarioList {
     void this.router.navigate(['/usuarios/editar', fila.id], { state: { fila } });
   }
 
-  /** Baja logica: el backend no expone DELETE de usuarios. */
   protected darDeBaja(fila: Usuario): void {
     const datos: ConfirmarDatos = {
       titulo: 'Desactivar la cuenta',
-      mensaje: `${fila.nombre} no podra iniciar sesion y sus sesiones activas se cerraran (RN-12). El registro se conserva.`,
+      mensaje: `${fila.nombre} no podrá iniciar sesión y sus sesiones activas se cerrarán. El registro se conserva.`,
       confirmar: 'Desactivar',
       destructivo: true,
     };

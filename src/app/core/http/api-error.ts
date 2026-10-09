@@ -1,20 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { BloqueoConflicto, CitaAfectada } from './api.types';
 
-/**
- * El backend usa tres formas de cuerpo de error y hay que distinguirlas:
- *
- *  - `{ message }` — la habitual.
- *  - `Record<campo, mensaje>` — el 400 de validacion de Bean Validation.
- *  - `{ message, citasActivas }` — el 409 de un bloqueo que alcanza citas.
- */
 export function mensajeDeError(error: unknown): string {
   if (!(error instanceof HttpErrorResponse)) {
-    return 'Ocurrio un error inesperado.';
+    return 'Ocurrió un error inesperado.';
   }
 
   if (error.status === 0) {
-    return 'No se pudo contactar con el servidor. Comprueba que este en marcha.';
+    return 'No se pudo contactar con el servidor. Comprueba que esté en marcha.';
   }
 
   const cuerpo: unknown = error.error;
@@ -26,7 +19,6 @@ export function mensajeDeError(error: unknown): string {
       return registro['message'];
     }
 
-    // 400 de validacion: mapa campo -> mensaje. Se listan los mensajes.
     const mensajes = Object.values(registro).filter((v): v is string => typeof v === 'string');
     if (mensajes.length > 0) {
       return mensajes.join(' ');
@@ -45,20 +37,16 @@ export function mensajeDeError(error: unknown): string {
     case 404:
       return 'El recurso solicitado no existe.';
     case 409:
-      return 'La operacion entra en conflicto con el estado actual.';
-    // HU-09: la peticion es correcta pero incumple una regla de negocio, como la
-    // ventana de reserva de RN-05. El backend suele explicar cual en `message`;
-    // esto solo cubre el caso en que no lo haga.
+      return 'La operación entra en conflicto con el estado actual.';
     case 422:
       return 'La solicitud no cumple una regla del sistema.';
     case 423:
-      return 'Cuenta bloqueada temporalmente. Intentalo de nuevo en unos minutos.';
+      return 'Cuenta bloqueada temporalmente. Inténtalo de nuevo en unos minutos.';
     default:
-      return 'Ocurrio un error inesperado.';
+      return 'Ocurrió un error inesperado.';
   }
 }
 
-/** Devuelve el mapa campo -> mensaje si el error es un 400 de validacion. */
 export function erroresDeValidacion(error: unknown): Record<string, string> | null {
   if (!(error instanceof HttpErrorResponse) || error.status !== 400) {
     return null;
@@ -73,10 +61,6 @@ export function erroresDeValidacion(error: unknown): Record<string, string> | nu
   return entradas.length > 0 ? Object.fromEntries(entradas) : null;
 }
 
-/**
- * Extrae las citas afectadas del 409 de un bloqueo. Es el unico error del
- * sistema con datos estructurados, y hay que mostrarlo como tabla.
- */
 export function citasAfectadas(error: unknown): CitaAfectada[] | null {
   if (!(error instanceof HttpErrorResponse) || error.status !== 409) {
     return null;

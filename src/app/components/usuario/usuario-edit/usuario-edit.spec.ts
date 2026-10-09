@@ -69,17 +69,6 @@ function montar(id: string | null) {
   return { httpMock, fixture, componente: fixture.componentInstance as unknown as Interno };
 }
 
-/**
- * Esta pantalla reparte credenciales y ya no da de alta personas.
- *
- * Lo que se fija aquí son las dos formas en que una cuenta nacía inservible. La
- * del odontólogo, sin su registro profesional, no podía declarar horario ni ver
- * su agenda; ahora se crea entera en «Odontólogos» y el rol ni se ofrece. Y la
- * del paciente sin documento nacía sin ficha, y sin ficha no puede reservar —el
- * servidor responde 403—, que es lo único que iba a hacer con ella; ahora el
- * documento es obligatorio y se comprueba contra el padrón, porque la cuenta
- * existe para dar acceso a alguien que ya está registrado.
- */
 describe('UsuarioEdit', () => {
   it('elAlta_noOfreceElRolDeOdontologo', () => {
     const { componente } = montar(null);
@@ -97,12 +86,6 @@ describe('UsuarioEdit', () => {
     expect(raiz.querySelector('[formcontrolname="documento"]')).toBeNull();
   });
 
-  /**
-   * Nada en el sistema resuelve a una recepcionista por su ficha, y la que se
-   * creaba nacía sin nombres: aparecía en el padrón de pacientes identificada solo
-   * por su número de historia, que es el defecto que ya hubo que parchear a mano
-   * en la siembra.
-   */
   it('elAltaDePersonal_noEnviaDocumentoNiTipoDeDocumento', () => {
     const { httpMock, componente } = montar(null);
 
@@ -148,11 +131,6 @@ describe('UsuarioEdit', () => {
     });
   });
 
-  /**
-   * Sin ficha la cuenta no puede reservar, así que crearla para alguien que no
-   * está en el padrón es entregar credenciales que no sirven. El aviso dice dónde
-   * registrarlo, que es lo que de verdad hace falta.
-   */
   it('elAltaDePaciente_conUnDocumentoQueNoEstaEnElPadron_noCreaLaCuenta', () => {
     const { httpMock, componente } = montar(null);
 
@@ -191,12 +169,6 @@ describe('UsuarioEdit', () => {
     expect(componente.error()).toContain('ya tiene cuenta');
   });
 
-  /**
-   * La edición sí ofrece los cuatro: cambiar el rol de una cuenta que ya existe
-   * es cosa del administrador, y es lo que permite ascender a odontólogo a quien
-   * ya tenía cuenta, para completar después su registro profesional desde el
-   * listado.
-   */
   it('laEdicion_ofreceLosCuatroRoles', () => {
     const { componente } = montar('usr-1');
 

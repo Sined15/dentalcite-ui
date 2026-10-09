@@ -7,6 +7,7 @@ import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { mensajeDeError } from '../../core/http/api-error';
 import { Plan, PlanSesion, Recomendacion } from '../../models';
@@ -18,21 +19,8 @@ export interface CerrarSesionDatos {
   sesion: PlanSesion;
 }
 
-/** Lo que admite la observación, que es también lo que exige el servidor. */
 const MAXIMO_OBSERVACION = 300;
 
-/**
- * Cierre de una sesión con sus recomendaciones.
- *
- * <p>Las recomendaciones se eligen, no se escriben: el catálogo es cerrado, así que
- * son casillas y no un campo de texto. Lo que el odontólogo quiera añadir con sus
- * palabras va en la observación, y junto a ella está escrito que son cuidados y no
- * una indicación clínica —la frontera que el alcance del proyecto no cruza—.
- *
- * <p>El botón no se habilita sin al menos una recomendación y sin fecha, para que el
- * 400 del servidor sea la red y no el camino normal; es la misma decisión que toma
- * `SuspenderPlanDialogo` con el motivo.
- */
 @Component({
   selector: 'app-cerrar-sesion-dialogo',
   providers: [provideNativeDateAdapter()],
@@ -44,18 +32,22 @@ const MAXIMO_OBSERVACION = 300;
     MatDatepickerModule,
     MatDialogModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
   ],
   template: `
     <h2 mat-dialog-title>Cerrar la sesión {{ datos.sesion.numero }}</h2>
     <mat-dialog-content>
-      <p class="resumen">
-        <strong>{{ datos.plan.tratamiento.nombre }}</strong> ·
-        {{ datos.plan.paciente.nombre }}
-        @if (datos.sesion.cita; as cita) {
-          <br />
-          Atendida el {{ cita.inicio | date: 'd MMM y' }} · {{ cita.codigo }}
-        }
+      <p class="dc-resumen">
+        <mat-icon aria-hidden="true">assignment</mat-icon>
+        <span>
+          <strong>{{ datos.plan.tratamiento.nombre }}</strong> ·
+          {{ datos.plan.paciente.nombre }}
+          @if (datos.sesion.cita; as cita) {
+            <br />
+            Atendida el {{ cita.inicio | date: 'd MMM y' }} · {{ cita.codigo }}
+          }
+        </span>
       </p>
 
       <fieldset class="cuidados">
@@ -103,9 +95,12 @@ const MAXIMO_OBSERVACION = 300;
         <mat-hint align="end">{{ observacion.length }} / {{ maximo }}</mat-hint>
       </mat-form-field>
 
-      <p class="aviso">
-        La observación son cuidados posteriores, no una indicación clínica: no se usa para
-        diagnóstico ni para recetar.
+      <p class="dc-aviso">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <span>
+          La observación son cuidados posteriores, no una indicación clínica: no se usa para
+          diagnóstico ni para recetar.
+        </span>
       </p>
 
       @if (error(); as mensaje) {
@@ -117,7 +112,6 @@ const MAXIMO_OBSERVACION = 300;
       <button mat-button type="button" [disabled]="enviando()" (click)="cerrar()">Volver</button>
       <button
         mat-flat-button
-        color="primary"
         type="button"
         [disabled]="!sePuedeEnviar() || enviando()"
         (click)="guardar()"
@@ -127,10 +121,6 @@ const MAXIMO_OBSERVACION = 300;
     </mat-dialog-actions>
   `,
   styles: `
-    .resumen {
-      margin: 0 0 1rem;
-      line-height: 1.5;
-    }
     .cuidados {
       border: 0;
       margin: 0 0 0.75rem;
@@ -141,23 +131,20 @@ const MAXIMO_OBSERVACION = 300;
       min-width: min(24rem, 70vw);
     }
     legend {
-      font-weight: 600;
+      font: var(--text-label);
       padding: 0;
-      margin-bottom: 0.25rem;
+      margin-bottom: var(--space-2);
     }
     .campo {
       width: 100%;
     }
-    /* Color propio en vez de opacidad: al 75 % el contraste caía por debajo del
-       4.5:1 que exige la accesibilidad del proyecto. */
-    .ayuda,
-    .aviso {
-      margin: 0.25rem 0 0;
-      font-size: 0.875rem;
-      color: var(--mat-sys-on-surface-variant, #45464f);
+    .ayuda {
+      margin: var(--space-1) 0 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
       font-size: 0.875rem;
       margin: 0.75rem 0 0;
     }
@@ -170,7 +157,6 @@ export class CerrarSesionDialogo {
   protected readonly datos = inject<CerrarSesionDatos>(MAT_DIALOG_DATA);
 
   protected readonly maximo = MAXIMO_OBSERVACION;
-  /** El calendario no deja elegir ayer, que es lo que el servidor rechaza con un 400. */
   protected readonly hoy = new Date();
 
   protected readonly catalogo = signal<Recomendacion[]>([]);
@@ -182,11 +168,6 @@ export class CerrarSesionDialogo {
   protected proximoControl: Date | null = null;
   protected observacion = '';
 
-  /**
-   * Un método y no un `computed`: la fecha llega por `ngModel` a una propiedad
-   * normal, que no avisa al cambiar, así que un `computed` se quedaría con el
-   * veredicto que dio antes de elegirla y el botón no se habilitaría nunca.
-   */
   protected sePuedeEnviar(): boolean {
     return this.elegidas().length > 0 && this.proximoControl !== null;
   }
@@ -232,7 +213,6 @@ export class CerrarSesionDialogo {
       .cerrarSesion(this.datos.plan.id, this.datos.sesion.numero, {
         recomendacionIds: this.elegidas(),
         proximoControl: aIso(this.proximoControl),
-        // Ausente y no vacía: una observación en blanco es no haber escrito ninguna.
         ...(observacion ? { observacion } : {}),
       })
       .subscribe({
@@ -241,9 +221,6 @@ export class CerrarSesionDialogo {
           this.dialogRef.close(plan);
         },
         error: (err: unknown) => {
-          // El 409 —la sesión no tiene cita atendida o ya estaba cerrada— y el 403
-          // se muestran aquí sin cerrar el diálogo: quien opera necesita leer por
-          // qué no se pudo.
           this.error.set(mensajeDeError(err));
           this.enviando.set(false);
         },
@@ -251,12 +228,6 @@ export class CerrarSesionDialogo {
   }
 }
 
-/**
- * La fecha en "YYYY-MM-DD" local, que es como la espera el servidor.
- *
- * No sirve `toISOString()`: pasa por UTC, y en Lima una fecha a medianoche
- * retrocederia al dia anterior.
- */
 function aIso(fecha: Date): string {
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   const dia = String(fecha.getDate()).padStart(2, '0');

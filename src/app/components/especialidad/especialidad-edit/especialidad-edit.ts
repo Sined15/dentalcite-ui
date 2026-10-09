@@ -1,8 +1,10 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -11,6 +13,7 @@ import { mensajeDeError } from '../../../core/http/api-error';
 import { Especialidad } from '../../../models';
 import { EspecialidadService } from '../../../services/especialidad.service';
 import { buscarEnPaginas } from '../../../shared/buscar-en-paginas';
+import { visualDeEspecialidad } from '../../../shared/especialidad-visual';
 
 @Component({
   selector: 'app-especialidad-edit',
@@ -19,13 +22,19 @@ import { buscarEnPaginas } from '../../../shared/buscar-en-paginas';
     MatButtonModule,
     MatCardModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatProgressBarModule,
   ],
   template: `
     <h1>{{ esEdicion() ? 'Editar especialidad' : 'Nueva especialidad' }}</h1>
+    <p class="ayuda">
+      El nombre y la imagen se ven en la galería pública. Cada tratamiento lo atienden solo los
+      odontólogos que tienen la especialidad que exige.
+    </p>
 
-    <mat-card class="tarjeta">
+    <div class="disposicion">
+    <mat-card class="tarjeta" appearance="outlined">
       @if (cargando()) {
         <mat-progress-bar mode="indeterminate" aria-label="Guardando" />
       }
@@ -40,19 +49,14 @@ import { buscarEnPaginas } from '../../../shared/buscar-en-paginas';
           </mat-form-field>
 
           <mat-form-field appearance="outline">
-            <mat-label>Descripcion (opcional)</mat-label>
+            <mat-label>Descripción (opcional)</mat-label>
             <textarea matInput rows="3" formControlName="descripcion"></textarea>
           </mat-form-field>
 
-          <!--
-            RF-09 (v4): la imagen con que la especialidad se presenta en la
-            galeria publica. Es una ruta, no una subida: las de demostracion
-            viajan con este mismo cliente, en public/img/catalogo/.
-          -->
           <mat-form-field appearance="outline">
             <mat-label>Imagen (opcional)</mat-label>
             <input matInput formControlName="imagenUrl" placeholder="/img/catalogo/ejemplo.svg" />
-            <mat-hint>Ruta o URL de la imagen que se ve en la galeria publica</mat-hint>
+            <mat-hint>Ruta o URL de la imagen que se ve en la galería pública</mat-hint>
           </mat-form-field>
 
           @if (error(); as mensaje) {
@@ -63,7 +67,6 @@ import { buscarEnPaginas } from '../../../shared/buscar-en-paginas';
             <button mat-button type="button" (click)="cancelar()">Cancelar</button>
             <button
               mat-flat-button
-              color="primary"
               type="submit"
               [disabled]="formulario.invalid || cargando()"
             >
@@ -73,14 +76,79 @@ import { buscarEnPaginas } from '../../../shared/buscar-en-paginas';
         </form>
       </mat-card-content>
     </mat-card>
+
+    <aside class="previa" aria-label="Vista previa">
+      <p class="previa-titulo">Así se verá en la galería</p>
+      <article class="previa-tarjeta" [attr.data-spec]="visual().clave">
+        <span class="dc-spec-tile" aria-hidden="true">
+          <mat-icon>{{ visual().icono }}</mat-icon>
+        </span>
+        <p class="previa-rotulo">ESPECIALIDAD</p>
+        <h2>{{ valores().nombre || 'Nombre de la especialidad' }}</h2>
+        @if (valores().descripcion) {
+          <p class="previa-texto">{{ valores().descripcion }}</p>
+        }
+      </article>
+      <p class="dc-aviso">
+        <mat-icon aria-hidden="true">auto_awesome</mat-icon>
+        <span>El color y el icono se asignan por el nombre; no hay que elegirlos.</span>
+      </p>
+    </aside>
+    </div>
   `,
   styles: `
     h1 {
-      font-size: 1.5rem;
-      margin: 0 0 1rem;
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
+      margin: 0 0 var(--space-5);
+    }
+    .ayuda {
+      margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
+    }
+    .disposicion {
+      display: grid;
+      grid-template-columns: minmax(0, 34rem) minmax(0, 20rem);
+      gap: var(--space-6);
+      align-items: start;
     }
     .tarjeta {
       max-width: 34rem;
+    }
+    .previa-titulo {
+      margin: 0 0 var(--space-3);
+      font: var(--text-label);
+      color: var(--ink-muted);
+    }
+    .previa-tarjeta {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      padding: var(--space-5);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .previa-tarjeta h2 {
+      margin: 0;
+      font: var(--text-title-sm);
+    }
+    .previa-rotulo {
+      margin: 0;
+      font: var(--text-overline);
+      letter-spacing: 0.08em;
+      color: var(--spec);
+    }
+    .previa-texto {
+      margin: 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    @media (max-width: 60rem) {
+      .disposicion {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
     form {
       display: flex;
@@ -93,9 +161,17 @@ import { buscarEnPaginas } from '../../../shared/buscar-en-paginas';
       gap: 0.5rem;
       margin-top: 1rem;
     }
+    @media (max-width: 30rem) {
+      .acciones {
+        flex-direction: column-reverse;
+      }
+      .acciones button {
+        width: 100%;
+      }
+    }
     .error {
-      color: var(--mat-sys-error, #b3261e);
-      font-size: 0.875rem;
+      color: var(--danger-ink);
+      font: var(--text-body-sm);
     }
   `,
 })
@@ -118,14 +194,16 @@ export class EspecialidadEdit {
     imagenUrl: [''],
   });
 
+  protected readonly valores = toSignal(this.formulario.valueChanges, {
+    initialValue: this.formulario.getRawValue(),
+  });
+  protected readonly visual = computed(() => visualDeEspecialidad(this.valores().nombre ?? ''));
+
   constructor() {
     if (!this.id) {
       return;
     }
 
-    // El listado pasa la fila por estado de navegacion. Solo hace falta ir a
-    // buscarla cuando ese estado se perdio, por ejemplo tras recargar: este
-    // recurso no expone `GET /{id}`.
     const fila = this.router.getCurrentNavigation()?.extras.state?.['fila'] as
       | Especialidad
       | undefined;
@@ -174,7 +252,6 @@ export class EspecialidadEdit {
     const cuerpo = {
       nombre: valores.nombre,
       descripcion: valores.descripcion || undefined,
-      // PUT reemplaza el recurso entero: omitir la imagen la borraria.
       imagenUrl: valores.imagenUrl || undefined,
     };
 

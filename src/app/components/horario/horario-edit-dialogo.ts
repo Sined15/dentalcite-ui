@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { mensajeDeError } from '../../core/http/api-error';
@@ -14,13 +15,6 @@ export interface HorarioDialogoDatos {
   horario: Horario | null;
 }
 
-/**
- * Alta y edicion de un tramo de horario.
- *
- * `horaInicio` y `horaFin` son `LocalTime`: viajan como cadena "HH:mm" o
- * "HH:mm:ss", sin fecha ni zona. El input nativo `type="time"` produce ya ese
- * formato, asi que no interviene ningun `Date`.
- */
 @Component({
   selector: 'app-horario-edit-dialogo',
   imports: [
@@ -28,6 +22,7 @@ export interface HorarioDialogoDatos {
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatSelectModule,
   ],
@@ -36,7 +31,7 @@ export interface HorarioDialogoDatos {
     <mat-dialog-content>
       <form [formGroup]="formulario">
         <mat-form-field appearance="outline">
-          <mat-label>Dia de la semana</mat-label>
+          <mat-label>Día de la semana</mat-label>
           <mat-select formControlName="diaSemana">
             @for (dia of dias; track dia.valor) {
               <mat-option [value]="dia.valor">{{ dia.nombre }}</mat-option>
@@ -66,19 +61,26 @@ export interface HorarioDialogoDatos {
         </div>
 
         @if (formulario.hasError('rangoInvalido')) {
-          <p class="error" role="alert">La hora de inicio debe ser anterior a la de fin (RN-03)</p>
+          <p class="error" role="alert">La hora de inicio debe ser anterior a la de fin.</p>
         }
 
         @if (error(); as mensaje) {
           <p class="error" role="alert">{{ mensaje }}</p>
         }
+
+        <p class="dc-aviso">
+          <mat-icon aria-hidden="true">info</mat-icon>
+          <span>
+            Los horarios se escriben en la hora de la clínica. Los cambios se reflejan en la
+            disponibilidad de inmediato.
+          </span>
+        </p>
       </form>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button type="button" (click)="dialogRef.close(false)">Cancelar</button>
       <button
         mat-flat-button
-        color="primary"
         type="button"
         [disabled]="formulario.invalid || enviando()"
         (click)="guardar()"
@@ -91,20 +93,23 @@ export interface HorarioDialogoDatos {
     form {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: var(--space-1);
       min-width: min(100%, 22rem);
     }
     .fila {
       display: flex;
-      gap: 1rem;
+      gap: var(--space-4);
       flex-wrap: wrap;
     }
     .fila mat-form-field {
       flex: 1 1 8rem;
     }
+    .fila input {
+      font-family: var(--font-mono);
+    }
     .error {
-      color: var(--mat-sys-error, #b3261e);
-      font-size: 0.875rem;
+      color: var(--danger-ink);
+      font: var(--text-body-sm);
       margin: 0;
     }
   `,
@@ -127,8 +132,6 @@ export class HorarioEditDialogo {
       horaFin: [recortar(this.datos.horario?.horaFin) || '13:00', [Validators.required]],
     },
     {
-      // RN-03. El servicio tambien lo valida, pero avisar antes de enviar
-      // ahorra un 400 innecesario.
       validators: (grupo) => {
         const inicio = grupo.get('horaInicio')?.value as string;
         const fin = grupo.get('horaFin')?.value as string;
@@ -156,14 +159,12 @@ export class HorarioEditDialogo {
       },
       error: (err: unknown) => {
         this.enviando.set(false);
-        // Un 409 significa solape con otro tramo ya declarado.
         this.error.set(mensajeDeError(err));
       },
     });
   }
 }
 
-/** "09:00:00" -> "09:00", que es lo que espera `input[type=time]`. */
 function recortar(hora: string | undefined): string {
   return hora ? hora.slice(0, 5) : '';
 }

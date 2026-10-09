@@ -7,10 +7,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { environment } from '../../../../environments/environment';
 import { Registro } from './registro';
 
-/**
- * El registro no abre sesion, asi que lo unico que tiene que hacer con el
- * destino pedido es no perderlo: pasarlo al login, que es quien vuelve a el.
- */
 
 const API_REGISTRO = `${environment.apiUrl}/api/v1/auth/registro`;
 

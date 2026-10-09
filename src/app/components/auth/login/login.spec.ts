@@ -7,18 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { environment } from '../../../../environments/environment';
 import { Login } from './login';
 
-/**
- * Lo que se prueba aqui es a donde aterriza el usuario despues de entrar.
- *
- * Sin sesion, las guardias mandan al login con `returnUrl` (HU-06, v4), y de
- * nada sirve conservar ese destino si el login no lo respeta. La otra mitad es
- * que no lo respete a ciegas: `returnUrl` viaja en la URL, o sea que lo escribe
- * quien quiera.
- */
 
 const API_LOGIN = `${environment.apiUrl}/api/v1/auth/login`;
 
-/** JWT sin firmar: de la sesion solo se decodifica el payload. */
 function sesion(rol: string, requiereCambio = false): string {
   const b64 = (o: unknown) =>
     btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -32,7 +23,6 @@ function sesion(rol: string, requiereCambio = false): string {
   return `${b64({ alg: 'HS256' })}.${b64(payload)}.firma`;
 }
 
-/** Destinos minimos, para que la navegacion tenga a donde llegar. */
 @Component({ selector: 'app-destino-stub', template: '' })
 class DestinoStub {}
 
@@ -76,7 +66,6 @@ async function entrarCon(returnUrl: string | null, token: string): Promise<Route
   componente.enviar();
   http.expectOne(API_LOGIN).flush({ token });
   await fixture.whenStable();
-  // La navegacion no se resuelve en el mismo tick que la respuesta.
   await new Promise((listo) => setTimeout(listo, 0));
   http.verify();
 
@@ -97,8 +86,6 @@ describe('Login', () => {
   });
 
   it('el cambio de contraseña obligatorio manda aunque haya returnUrl', async () => {
-    // El backend bloquea todo lo demas mientras el token lo exija, asi que
-    // respetar el destino aqui seria mandar al usuario a una pantalla muerta.
     const router = await entrarCon('/disponibilidad', sesion('ODONTOLOGO', true));
     expect(router.url).toBe('/cambiar-password');
   });
@@ -109,10 +96,55 @@ describe('Login', () => {
   });
 
   it('ignora un returnUrl que empieza por doble barra', async () => {
-    // `//ejemplo.invalido` empieza por barra pero el navegador lo resuelve como
-    // host ajeno: es la forma disimulada de la redireccion abierta.
     const router = await entrarCon('//ejemplo.invalido', sesion('ADMINISTRADOR'));
     expect(router.url).toBe('/usuarios');
+  });
+});
+
+describe('Login · fallos', () => {
+  afterEach(() => localStorage.clear());
+
+  function intentarYFallar(estado: number, cuerpo: object): HTMLElement {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [Login],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter(RUTAS),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const fixture: ComponentFixture<Login> = TestBed.createComponent(Login);
+    const componente = fixture.componentInstance as unknown as Interno;
+    fixture.detectChanges();
+    componente.formulario.setValue({ correo: 'ana@dentalcite.pe', password: 'Secreta.123' });
+    componente.enviar();
+    http.expectOne(API_LOGIN).flush(cuerpo, { status: estado, statusText: 'Error' });
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('unas credenciales erróneas se explican sin bloquear el botón', () => {
+    const raiz = intentarYFallar(401, { message: 'Bad credentials' });
+    expect(raiz.querySelector('[role="alert"]')?.textContent).toContain(
+      'El correo o la contraseña no coinciden',
+    );
+    expect(raiz.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+  });
+
+  it('la cuenta bloqueada apaga el botón y dice por qué', () => {
+    const raiz = intentarYFallar(423, { message: 'Cuenta bloqueada' });
+    expect(raiz.querySelector('[role="alert"]')?.textContent).toContain(
+      'Cuenta bloqueada por cinco minutos',
+    );
+    expect(raiz.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+    expect(raiz.querySelector('#por-que-bloqueada')).not.toBeNull();
   });
 });
 
@@ -143,7 +175,6 @@ describe('Login · camino al registro', () => {
   }
 
   it('el enlace al registro conserva el destino pedido', () => {
-    // Quien aun no tiene cuenta tiene que volver igualmente a la franja que eligio.
     const href = enlaceAlRegistro('/disponibilidad?tratamientoId=tra-1&inicio=09:30');
     const destino = new URL(href ?? '', 'http://x').searchParams.get('returnUrl');
     expect(destino).toBe('/disponibilidad?tratamientoId=tra-1&inicio=09:30');

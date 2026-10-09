@@ -1,56 +1,77 @@
 import { Component, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 
-/**
- * Destino del `rolGuard` cuando hay sesion pero el rol no alcanza. Es distinto
- * de no tener sesion, y mandar al login en este caso confundiria al usuario.
- */
 @Component({
   selector: 'app-sin-permiso',
-  imports: [MatButtonModule, MatCardModule, MatIconModule],
+  imports: [MatButtonModule, MatIconModule],
   template: `
-    <div class="pantalla-acceso">
-      <mat-card class="tarjeta">
-        <mat-card-content>
-          <mat-icon class="icono" aria-hidden="true">lock</mat-icon>
-          <h1>Sin permiso</h1>
-          <p>
-            Tu rol ({{ rol() ?? 'sin definir' }}) no tiene acceso a esta seccion.
-          </p>
-        </mat-card-content>
-        <mat-card-actions>
-          <button mat-flat-button color="primary" type="button" (click)="volver()">
-            Volver al inicio
-          </button>
-        </mat-card-actions>
-      </mat-card>
-    </div>
+    <main class="pantalla">
+      <span class="insignia" aria-hidden="true"><mat-icon>lock</mat-icon></span>
+      <p class="codigo">Error 403</p>
+      <h1>No tienes permiso para ver esto</h1>
+      <p class="texto">
+        Tu rol ({{ rol() ?? 'sin definir' }}) no incluye esta sección. Si crees que debería,
+        pídele acceso a quien administra la clínica.
+      </p>
+      <div class="acciones">
+        <button mat-flat-button type="button" (click)="volver()">
+          <mat-icon aria-hidden="true">home</mat-icon>
+          Volver a mi inicio
+        </button>
+      </div>
+    </main>
   `,
   styles: `
-    .pantalla-acceso {
+    .pantalla {
       display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 60dvh;
-      padding: 1rem;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-4);
+      max-width: var(--layout-form);
+      margin: var(--space-10) auto;
+      padding-inline: var(--space-2);
     }
-    .tarjeta {
-      max-width: 26rem;
-      text-align: center;
+    .insignia {
+      width: 4rem;
+      height: 4rem;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      color: var(--ink-muted);
     }
-    .icono {
-      font-size: 3rem;
-      width: 3rem;
-      height: 3rem;
-      margin-top: 1rem;
+    .insignia mat-icon {
+      width: 1.875rem;
+      height: 1.875rem;
+      font-size: 1.875rem;
+    }
+    .codigo {
+      margin: 0;
+      font: var(--text-code);
+      color: var(--ink-muted);
     }
     h1 {
-      font-size: 1.25rem;
-      margin: 0.5rem 0;
+      margin: 0;
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
+    }
+    .texto {
+      margin: 0;
+      font: var(--text-body-lg);
+      color: var(--ink-muted);
+    }
+    .acciones {
+      width: 100%;
+    }
+    @media (max-width: 37.5rem) {
+      .acciones button {
+        width: 100%;
+        min-height: 3rem;
+      }
     }
   `,
 })

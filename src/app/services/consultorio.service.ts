@@ -4,7 +4,6 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Consultorio } from '../models';
 
-/** Solo lectura: F-12 excluye el mantenimiento de consultorios por interfaz. */
 @Injectable({ providedIn: 'root' })
 export class ConsultorioService {
   private readonly http = inject(HttpClient);

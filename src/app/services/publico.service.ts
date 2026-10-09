@@ -10,14 +10,6 @@ import {
   TratamientoPublico,
 } from '../models';
 
-/**
- * El catalogo abierto (HU-06, v4). No lleva paginacion porque el backend no la
- * ofrece: son ocho especialidades, ocho tratamientos y siete odontologos.
- *
- * El interceptor no anade `Authorization` cuando no hay sesion, asi que estas
- * llamadas salen anonimas solas; con sesion abierta llevan el token y responden
- * igual, que es lo que permite reusar estas pantallas desde dentro del portal.
- */
 @Injectable({ providedIn: 'root' })
 export class PublicoService {
   private readonly http = inject(HttpClient);
@@ -39,12 +31,6 @@ export class PublicoService {
     return this.http.get<OdontologoPublico[]>(`${this.url}/odontologos`);
   }
 
-  /**
-   * Que dias abre la clinica. Lo consumen los calendarios para no ofrecer un dia
-   * que despues no tiene ninguna franja: el horario por odontologo es de rol
-   * privilegiado y los feriados no tienen otra ruta, asi que sin esto el cliente
-   * no puede saberlo.
-   */
   calendario(): Observable<CalendarioPublico> {
     return this.http.get<CalendarioPublico>(`${this.url}/calendario`);
   }

@@ -6,6 +6,7 @@ import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
@@ -42,6 +43,7 @@ type Ambito = 'odontologo' | 'consultorio';
     MatCardModule,
     MatDatepickerModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatProgressBarModule,
     MatRadioModule,
@@ -49,26 +51,20 @@ type Ambito = 'odontologo' | 'consultorio';
   ],
   template: `
     <h1>{{ esEdicion() ? 'Editar bloqueo' : 'Nuevo bloqueo' }}</h1>
+    <p class="ayuda">
+      Cierra una agenda o un consultorio durante un rango. Mientras dure, ese horario deja de
+      ofrecerse al pedir cita.
+    </p>
 
-    <mat-card class="tarjeta">
+    <mat-card class="tarjeta" appearance="outlined">
       @if (cargando()) {
         <mat-progress-bar mode="indeterminate" aria-label="Guardando" />
       }
       <mat-card-content>
         <form [formGroup]="formulario" (ngSubmit)="enviar()">
-          <!--
-            Hay que indicar exactamente uno de odontologoId o consultorioId.
-            Bean Validation no lo comprueba —ninguno lleva anotacion—, lo hace
-            el servicio y devuelve 400, asi que se modela como excluyente.
-
-            El odontologo no elige: solo puede bloquear su propia agenda, y un
-            consultorio no puede bloquearlo en absoluto. El servidor responde 403
-            a las dos cosas, de modo que ofrecerle el desplegable de sus colegas
-            era mandarle a pulsar algo que no podia funcionar.
-          -->
           @if (!soloLoSuyo()) {
             <fieldset>
-              <legend>Que se bloquea</legend>
+              <legend>¿Qué se bloquea?</legend>
               <mat-radio-group formControlName="ambito" (change)="cambiarAmbito()">
                 <mat-radio-button value="odontologo">La agenda de un odontólogo</mat-radio-button>
                 <mat-radio-button value="consultorio">Un consultorio</mat-radio-button>
@@ -120,14 +116,11 @@ type Ambito = 'odontologo' | 'consultorio';
             }
           </mat-form-field>
 
-          <!--
-            El dia se marca en el calendario y la hora va aparte. Un campo unico
-            de fecha y hora obliga a teclear las dos cosas, y admite dias que no
-            existen; el calendario no.
-          -->
+          <section class="dc-seccion" aria-labelledby="seccion-rango">
+          <h2 id="seccion-rango">Desde y hasta</h2>
           <div class="fila">
             <mat-form-field appearance="outline">
-              <mat-label>Dia de inicio</mat-label>
+              <mat-label>Día de inicio</mat-label>
               <input
                 matInput
                 readonly
@@ -138,7 +131,7 @@ type Ambito = 'odontologo' | 'consultorio';
               <mat-datepicker-toggle matIconSuffix [for]="calendarioInicio" />
               <mat-datepicker #calendarioInicio [dateClass]="diasCerrados()" />
               @if (formulario.controls.diaInicio.hasError('required')) {
-                <mat-error>Marca el dia en el calendario</mat-error>
+                <mat-error>Marca el día en el calendario</mat-error>
               }
             </mat-form-field>
 
@@ -153,7 +146,7 @@ type Ambito = 'odontologo' | 'consultorio';
 
           <div class="fila">
             <mat-form-field appearance="outline">
-              <mat-label>Dia de fin</mat-label>
+              <mat-label>Día de fin</mat-label>
               <input
                 matInput
                 readonly
@@ -165,7 +158,7 @@ type Ambito = 'odontologo' | 'consultorio';
               <mat-datepicker-toggle matIconSuffix [for]="calendarioFin" />
               <mat-datepicker #calendarioFin [dateClass]="diasCerrados()" />
               @if (formulario.controls.diaFin.hasError('required')) {
-                <mat-error>Marca el dia en el calendario</mat-error>
+                <mat-error>Marca el día en el calendario</mat-error>
               }
             </mat-form-field>
 
@@ -179,8 +172,17 @@ type Ambito = 'odontologo' | 'consultorio';
           </div>
 
           @if (formulario.hasError('rangoInvalido')) {
-            <p class="error" role="alert">La fecha de inicio debe ser anterior a la de fin</p>
+            <p class="error" role="alert">La fecha de inicio debe ser anterior a la de fin.</p>
           }
+          </section>
+
+          <p class="dc-aviso dc-aviso--advertencia">
+            <mat-icon aria-hidden="true">warning</mat-icon>
+            <span>
+              Si ya hay citas confirmadas en ese rango, no se bloquea: te mostramos cuáles son para
+              que las muevas o canceles antes.
+            </span>
+          </p>
 
           @if (error(); as mensaje) {
             <p class="error" role="alert">{{ mensaje }}</p>
@@ -190,7 +192,6 @@ type Ambito = 'odontologo' | 'consultorio';
             <button mat-button type="button" (click)="cancelar()">Cancelar</button>
             <button
               mat-flat-button
-              color="primary"
               type="submit"
               [disabled]="formulario.invalid || cargando()"
             >
@@ -203,8 +204,14 @@ type Ambito = 'odontologo' | 'consultorio';
   `,
   styles: `
     h1 {
-      font-size: 1.5rem;
-      margin: 0 0 1rem;
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
+      margin: 0 0 var(--space-5);
+    }
+    .ayuda {
+      margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
     }
     .tarjeta {
       max-width: 40rem;
@@ -220,14 +227,25 @@ type Ambito = 'odontologo' | 'consultorio';
       margin: 0 0 1rem;
     }
     legend {
-      font-size: 0.875rem;
-      opacity: 0.8;
-      margin-bottom: 0.5rem;
+      font: var(--text-label);
+      padding: 0;
+      margin-bottom: var(--space-2);
     }
     mat-radio-group {
-      display: flex;
-      gap: 1.5rem;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+      gap: var(--space-3);
+    }
+    mat-radio-button {
+      padding-right: var(--space-3);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+    mat-radio-button.mat-mdc-radio-checked {
+      border-color: var(--brand);
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
     }
     .fila {
       display: flex;
@@ -246,12 +264,23 @@ type Ambito = 'odontologo' | 'consultorio';
       gap: 0.5rem;
       margin-top: 1rem;
     }
+    @media (max-width: 30rem) {
+      .acciones {
+        flex-direction: column-reverse;
+      }
+      .acciones button {
+        width: 100%;
+      }
+    }
     .error {
-      color: var(--mat-sys-error, #b3261e);
-      font-size: 0.875rem;
+      color: var(--danger-ink);
+      font: var(--text-body-sm);
     }
     .propio {
-      margin: 0 0 1rem;
+      margin: 0 0 var(--space-4);
+    }
+    .fila input[type='time'] {
+      font-family: var(--font-mono);
     }
   `,
 })
@@ -275,22 +304,11 @@ export class BloqueoEdit {
   protected readonly error = signal<string | null>(null);
   protected readonly odontologos = signal<Odontologo[]>([]);
 
-  /**
-   * Quien solo puede bloquear lo suyo. Recepción y administración bloquean la
-   * agenda de cualquiera y también un consultorio; el odontólogo, únicamente la
-   * propia, que es lo que comprueba el servidor antes de escribir.
-   */
   protected readonly soloLoSuyo = computed(() => this.auth.rol() === 'ODONTOLOGO');
 
-  /** Su registro, del que sale el identificador que viaja en el cuerpo. */
   protected readonly miRegistro = signal<Odontologo | null>(null);
   protected readonly consultorios = signal<Consultorio[]>([]);
 
-  /**
-   * Los dias sin atencion se atenuan pero **se pueden marcar**: una ausencia
-   * empieza el viernes y acaba el lunes, y obligar a que los extremos caigan en
-   * dia laborable haria imposible bloquear un puente.
-   */
   protected readonly diasAbiertos = signal<CalendarioPublico | null>(null);
   protected readonly diasCerrados = computed(() => claseDeDias(this.diasAbiertos()));
 
@@ -323,16 +341,10 @@ export class BloqueoEdit {
   constructor() {
     this.publicoService.calendario().subscribe({
       next: (dias) => this.diasAbiertos.set(dias),
-      // Sin el dato el calendario no atenua nada, que es como estaba antes.
       error: () => this.diasAbiertos.set(null),
     });
 
     if (this.soloLoSuyo()) {
-      // El identificador se resuelve aqui y no se elige: es el mismo camino
-      // —cuenta, ficha, registro— por el que el servidor decide si el bloqueo es
-      // sobre lo propio, asi que preguntarlo de otra forma podria discrepar de su
-      // veredicto. Sin registro no hay agenda que bloquear, y se dice en vez de
-      // dejar un formulario que fallaria al enviarse.
       miOdontologo(this.usuarioService, this.odontologoService).subscribe((mio) => {
         this.miRegistro.set(mio);
         if (mio) {
@@ -365,7 +377,6 @@ export class BloqueoEdit {
       return;
     }
 
-    // El listado de bloqueos no esta paginado, asi que basta con recargarlo.
     this.cargando.set(true);
     this.servicio.listar().subscribe({
       next: (lista) => {
@@ -399,7 +410,6 @@ export class BloqueoEdit {
     this.cambiarAmbito();
   }
 
-  /** Solo el control del ambito elegido es obligatorio. */
   protected cambiarAmbito(): void {
     const esOdontologo = this.formulario.controls.ambito.value === 'odontologo';
     const odo = this.formulario.controls.odontologoId;
@@ -450,8 +460,6 @@ export class BloqueoEdit {
       error: (err: unknown) => {
         this.cargando.set(false);
 
-        // RN-03: si el rango alcanza citas confirmadas, el 409 las enumera. Se
-        // muestran como tabla para que el usuario sepa cuales cancelar.
         const citas = citasAfectadas(err);
         if (citas && citas.length > 0) {
           this.dialogo.open(CitasAfectadasDialogo, {
@@ -471,13 +479,6 @@ export class BloqueoEdit {
   }
 }
 
-/**
- * El dia marcado en el calendario y la hora tecleada, juntos, en hora local.
- *
- * Se construye con el constructor de componentes y no concatenando una cadena:
- * al interpretar una fecha con hora el navegador puede tomarla como UTC, y en
- * Lima eso adelantaria el bloqueo cinco horas.
- */
 function instante(dia: Date | null, hora: string): Date | null {
   if (!dia || !hora) {
     return null;
@@ -486,13 +487,11 @@ function instante(dia: Date | null, hora: string): Date | null {
   return new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), horas, minutos);
 }
 
-/** ISO con desfase -> el dia local a medianoche, que es lo que el calendario marca. */
 function aDia(iso: string): Date {
   const fecha = new Date(iso);
   return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
 }
 
-/** ISO con desfase -> "HH:mm" en hora local. */
 function aHora(iso: string): string {
   const fecha = new Date(iso);
   const horas = String(fecha.getHours()).padStart(2, '0');

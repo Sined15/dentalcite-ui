@@ -4,8 +4,8 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatTableModule } from '@angular/material/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeError } from '../../core/http/api-error';
 import { DIAS_SEMANA, Horario } from '../../models';
 import { HorarioService } from '../../services/horario.service';
@@ -14,28 +14,34 @@ import { HorarioEditDialogo, HorarioDialogoDatos } from './horario-edit-dialogo'
 
 @Component({
   selector: 'app-horario-list',
-  imports: [
-    RouterLink,
-    MatButtonModule,
-    MatDialogModule,
-    MatIconModule,
-    MatProgressBarModule,
-    MatTableModule,
-  ],
+  imports: [RouterLink, MatButtonModule, MatDialogModule, MatIconModule, MatProgressBarModule],
   template: `
     <header class="cabecera">
       <div>
-        <a mat-button routerLink="/odontologos">
-          <mat-icon>arrow_back</mat-icon>
-          Odontologos
-        </a>
-        <h1>Horario de atencion</h1>
+        @if (puedeVolverALaLista) {
+          <a mat-button routerLink="/odontologos">
+            <mat-icon>arrow_back</mat-icon>
+            Odontólogos
+          </a>
+        }
+        <h1>Horario de atención</h1>
+        <p class="ayuda">
+          Los días y horas en que atiende. Lo que ven los pacientes al pedir cita sale de aquí.
+        </p>
       </div>
-      <button mat-flat-button color="primary" type="button" (click)="abrirFormulario(null)">
+      <button mat-flat-button type="button" (click)="abrirFormulario(null)">
         <mat-icon>add</mat-icon>
         Nuevo tramo
       </button>
     </header>
+
+    <p class="aviso">
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <span>
+        Los horarios se escriben en la hora de la clínica. Los cambios se reflejan en la
+        disponibilidad de inmediato.
+      </span>
+    </p>
 
     @if (cargando()) {
       <mat-progress-bar mode="indeterminate" aria-label="Cargando horario" />
@@ -45,52 +51,48 @@ import { HorarioEditDialogo, HorarioDialogoDatos } from './horario-edit-dialogo'
       <p class="error" role="alert">{{ mensaje }}</p>
     }
 
-    <div class="tabla-scroll" tabindex="0" role="region" aria-label="Tabla de tramos de horario">
-      <table mat-table [dataSource]="filas()">
-        <ng-container matColumnDef="dia">
-          <th mat-header-cell *matHeaderCellDef>Dia</th>
-          <td mat-cell *matCellDef="let fila">{{ nombreDia(fila.diaSemana) }}</td>
-        </ng-container>
+    <ul class="semana" aria-label="Horario semanal">
+      @for (dia of semana(); track dia.valor) {
+        <li class="dia">
+          <h2>{{ dia.nombre }}</h2>
+          <div class="tramos">
+            @for (fila of dia.tramos; track fila.id) {
+              <span class="tramo">
+                <span class="hora">{{ fila.horaInicio }} – {{ fila.horaFin }}</span>
+                <button
+                  mat-icon-button
+                  type="button"
+                  (click)="abrirFormulario(fila)"
+                  [attr.aria-label]="
+                    'Editar el tramo del ' + dia.nombre + ' de ' + fila.horaInicio + ' a ' + fila.horaFin
+                  "
+                >
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="eliminar"
+                  (click)="eliminar(fila)"
+                  [attr.aria-label]="
+                    'Eliminar el tramo del ' + dia.nombre + ' de ' + fila.horaInicio + ' a ' + fila.horaFin
+                  "
+                >
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </span>
+            } @empty {
+              <span class="sin-tramos">
+                <mat-icon aria-hidden="true">bedtime</mat-icon>
+                No atiende este día
+              </span>
+            }
+          </div>
+        </li>
+      }
+    </ul>
 
-        <ng-container matColumnDef="inicio">
-          <th mat-header-cell *matHeaderCellDef>Desde</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.horaInicio }}</td>
-        </ng-container>
-
-        <ng-container matColumnDef="fin">
-          <th mat-header-cell *matHeaderCellDef>Hasta</th>
-          <td mat-cell *matCellDef="let fila">{{ fila.horaFin }}</td>
-        </ng-container>
-
-        <ng-container matColumnDef="acciones">
-          <th mat-header-cell *matHeaderCellDef class="col-acciones">Acciones</th>
-          <td mat-cell *matCellDef="let fila" class="col-acciones">
-            <button
-              mat-icon-button
-              type="button"
-              (click)="abrirFormulario(fila)"
-              [attr.aria-label]="'Editar el tramo del ' + nombreDia(fila.diaSemana)"
-            >
-              <mat-icon>edit</mat-icon>
-            </button>
-            <button
-              mat-icon-button
-              type="button"
-              color="warn"
-              (click)="eliminar(fila)"
-              [attr.aria-label]="'Eliminar el tramo del ' + nombreDia(fila.diaSemana)"
-            >
-              <mat-icon>delete</mat-icon>
-            </button>
-          </td>
-        </ng-container>
-
-        <tr mat-header-row *matHeaderRowDef="columnas"></tr>
-        <tr mat-row *matRowDef="let fila; columns: columnas"></tr>
-      </table>
-    </div>
-
-    @if (!cargando() && filas().length === 0) {
+    @if (!cargando() && filas().length === 0 && !error()) {
       <p class="vacio">Este odontólogo aún no tiene tramos de horario declarados.</p>
     }
   `,
@@ -103,30 +105,109 @@ import { HorarioEditDialogo, HorarioDialogoDatos } from './horario-edit-dialogo'
       flex-wrap: wrap;
       margin-bottom: 1rem;
     }
-    /*
-      Esta pantalla cuelga de una migaja de pan, asi que su titulo necesita
-      separarse de ella; el resto no. Se escribe con la clase por delante, y no
-      como un h1 suelto, para que gane al cromo global por especificidad y no
-      por el orden en que se inyecten las hojas de estilo.
-    */
     .cabecera h1 {
-      font-size: 1.5rem;
       margin: 0.5rem 0 0;
     }
-    table {
-      width: 100%;
-      min-width: 32rem;
+    .ayuda {
+      margin: var(--space-1) 0 0;
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
     }
-    .col-acciones {
-      width: 7rem;
-      text-align: right;
+    .aviso {
+      display: flex;
+      gap: var(--space-3);
+      align-items: flex-start;
+      margin: 0 0 var(--space-5);
+      padding: var(--space-3) var(--space-4);
+      background: var(--accent-soft);
+      border-radius: var(--radius-md);
+      font: var(--text-body-sm);
+    }
+    .aviso mat-icon {
+      flex: none;
+      color: var(--accent-ink);
+    }
+    .semana {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-width: 60rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .dia {
+      display: grid;
+      grid-template-columns: 9rem minmax(0, 1fr);
+      gap: var(--space-4);
+      align-items: center;
+      padding: var(--space-3) var(--space-5);
+      border-bottom: 1px solid var(--border);
+    }
+    .dia:last-child {
+      border-bottom: none;
+    }
+    .dia h2 {
+      margin: 0;
+      font: var(--text-title-sm);
+    }
+    .tramos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      align-items: center;
+    }
+    .tramo {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding-left: var(--space-4);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-pill);
+      background: var(--surface);
+    }
+    .hora {
+      font: var(--text-time);
+      font-variant-numeric: tabular-nums;
+    }
+    .eliminar {
+      --mat-icon-button-icon-color: var(--danger-ink);
+    }
+    .sin-tramos {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: 3rem;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .sin-tramos mat-icon {
+      width: 1.125rem;
+      height: 1.125rem;
+      font-size: 1.125rem;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
     }
     .vacio {
       padding: 1.5rem 0;
-      opacity: 0.7;
+      color: var(--ink-muted);
+    }
+    @media (max-width: 45rem) {
+      .dia {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-2);
+        padding: var(--space-4);
+      }
+      .tramo {
+        width: 100%;
+        justify-content: space-between;
+        min-height: 3rem;
+      }
+      .hora {
+        margin-right: auto;
+      }
     }
   `,
 })
@@ -138,17 +219,25 @@ export class HorarioList {
 
   private readonly odontologoId = this.ruta.snapshot.paramMap.get('odontologoId') as string;
 
-  protected readonly columnas = ['dia', 'inicio', 'fin', 'acciones'];
+  /** El odontólogo llega a su propio horario y no tiene la lista de odontólogos a la que volver. */
+  protected readonly puedeVolverALaLista = inject(AuthService).rol() === 'ADMINISTRADOR';
 
   private readonly datos = signal<Horario[]>([]);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /** Listado plano: se ordena en cliente por dia y hora. */
   protected readonly filas = computed(() =>
     [...this.datos()].sort(
       (a, b) => a.diaSemana - b.diaSemana || a.horaInicio.localeCompare(b.horaInicio),
     ),
+  );
+
+  /** Los siete días, también los vacíos: «no atiende» es información, no un hueco. */
+  protected readonly semana = computed(() =>
+    DIAS_SEMANA.map((dia) => ({
+      ...dia,
+      tramos: this.filas().filter((f) => f.diaSemana === dia.valor),
+    })),
   );
 
   constructor() {
@@ -164,7 +253,14 @@ export class HorarioList {
     this.error.set(null);
     this.servicio.listar(this.odontologoId).subscribe({
       next: (lista) => {
-        this.datos.set(lista);
+        // La API devuelve «09:00:00»; el horario se declara y se lee sin segundos.
+        this.datos.set(
+          lista.map((h) => ({
+            ...h,
+            horaInicio: h.horaInicio.slice(0, 5),
+            horaFin: h.horaFin.slice(0, 5),
+          })),
+        );
         this.cargando.set(false);
       },
       error: (err: unknown) => {
@@ -187,13 +283,13 @@ export class HorarioList {
       });
   }
 
-  /** Aqui el borrado es real: este recurso si expone DELETE. */
   protected eliminar(fila: Horario): void {
     const datos: ConfirmarDatos = {
       titulo: 'Eliminar el tramo',
-      mensaje: `Se eliminara el tramo del ${this.nombreDia(fila.diaSemana)} de ${fila.horaInicio} a ${fila.horaFin}.`,
+      mensaje: `Se eliminará el tramo del ${this.nombreDia(fila.diaSemana)} de ${fila.horaInicio} a ${fila.horaFin}.`,
       confirmar: 'Eliminar',
       destructivo: true,
+      icono: 'delete',
     };
 
     this.dialogo

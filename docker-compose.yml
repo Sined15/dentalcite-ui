@@ -1,19 +1,11 @@
-# HU-01 / RNF-11: «el cliente Angular arranca con la orden equivalente en el
-# suyo». Una sola orden, sin pasos manuales:
-#
-#   docker compose up
-#
-# Sirve el bundle ya construido en nginx. La API no se levanta aqui: vive en el
-# repositorio del servidor, que tiene su propio compose. El cliente la busca en
-# http://localhost:8080, resuelto en el navegador y no entre contenedores, asi
-# que ambos pueden arrancar por separado.
 services:
   client:
     build:
       context: .
+      args:
+        CONFIGURACION: local
     image: dentalcite/client:latest
     ports:
-      # El 4200 no es negociable: es el unico origen que admite el CORS de la API.
       - "4200:80"
     environment:
       TZ: UTC

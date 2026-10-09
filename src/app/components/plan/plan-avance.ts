@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, UpperCasePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,29 +9,19 @@ import { AuthService } from '../../core/auth/auth.service';
 import { mensajeDeError } from '../../core/http/api-error';
 import { EstadoSesion, Plan, sesionesPorCerrar } from '../../models';
 import { PlanService } from '../../services/plan.service';
+import { PublicoService } from '../../services/publico.service';
+import { especialidadPorTratamiento } from '../../shared/especialidad-de-tratamiento';
+import { visualDeEspecialidad } from '../../shared/especialidad-visual';
 
-/** Cómo se lee cada estado de una sesión en la línea de tiempo: texto e icono, nunca solo color. */
 const ESTADOS: Record<EstadoSesion, { texto: string; icono: string }> = {
   PENDIENTE: { texto: 'Pendiente', icono: 'radio_button_unchecked' },
   ATENDIDA: { texto: 'Atendida · pendiente de cierre', icono: 'pending_actions' },
   CERRADA: { texto: 'Completada', icono: 'check_circle' },
 };
 
-/**
- * El avance de un plan de tratamiento y la línea de tiempo de sus sesiones.
- *
- * <p>La abren el paciente —sus planes—, el odontólogo —los de sus pacientes— y
- * administración. Quién puede leer cuál lo decide el servidor con el plan en la
- * mano; aquí solo se traduce su 403 a algo que se entienda.
- *
- * <p>La cifra de avance se lee tal cual llega: la cuenta el servidor sobre las
- * citas atendidas, y contarla también aquí sería tener la misma cifra con dos
- * fórmulas. La barra acompaña al texto, no lo sustituye: quien no la ve tiene la
- * frase, y el lector de pantalla la anuncia con su propia etiqueta.
- */
 @Component({
   selector: 'app-plan-avance',
-  imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule],
+  imports: [DatePipe, UpperCasePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule],
   template: `
     <a mat-button [routerLink]="volver().ruta" class="volver">
       <mat-icon aria-hidden="true">arrow_back</mat-icon>
@@ -47,20 +37,36 @@ const ESTADOS: Record<EstadoSesion, { texto: string; icono: string }> = {
     }
 
     @if (plan(); as p) {
-      <header class="cabecera">
-        <h1>{{ p.tratamiento.nombre }}</h1>
-        <p class="dato">
-          @if (!esPaciente()) {
-            {{ p.paciente.nombre }} ·
+      <header class="encabezado" [attr.data-spec]="visual().clave">
+        <span class="dc-spec-tile grande" aria-hidden="true">
+          <mat-icon>{{ visual().icono }}</mat-icon>
+        </span>
+        <div class="texto">
+          @if (especialidad(); as nombre) {
+            <p class="rotulo">{{ nombre | uppercase }}</p>
           }
-          Con {{ p.odontologo.nombre }} ·
-          <span class="estado-plan">
-            <mat-icon aria-hidden="true">{{ p.activo ? 'play_circle' : 'pause_circle' }}</mat-icon>
-            {{ p.activo ? 'En curso' : 'Suspendido' }}
-          </span>
-        </p>
-        @if (p.motivoSuspension) {
-          <p class="dato">Motivo de la suspensión: {{ p.motivoSuspension }}</p>
+          <h1>{{ p.tratamiento.nombre }}</h1>
+          <p class="dato">
+            @if (!esPaciente()) {
+              {{ p.paciente.nombre }} ·
+            }
+            Con {{ p.odontologo.nombre }} ·
+            {{ p.sesionesPrevistas }}
+            {{ p.sesionesPrevistas === 1 ? 'sesión' : 'sesiones' }} ·
+            <span class="estado-plan">
+              <mat-icon aria-hidden="true">{{ p.activo ? 'play_circle' : 'pause_circle' }}</mat-icon>
+              {{ p.activo ? 'En curso' : 'Suspendido' }}
+            </span>
+          </p>
+          @if (p.motivoSuspension) {
+            <p class="dato">Motivo de la suspensión: {{ p.motivoSuspension }}</p>
+          }
+        </div>
+        @if (esPaciente() && p.activo) {
+          <a mat-flat-button routerLink="/disponibilidad">
+            <mat-icon>event_available</mat-icon>
+            Pedir cita
+          </a>
         }
       </header>
 
@@ -125,6 +131,18 @@ const ESTADOS: Record<EstadoSesion, { texto: string; icono: string }> = {
                     Próximo control: {{ control | date: "d 'de' MMMM 'de' y" }}
                   </p>
                 }
+                @if (esPaciente() && sesion.estado === 'ATENDIDA') {
+                  <p class="dato">
+                    Tu odontólogo aún no ha registrado las recomendaciones de esta sesión.
+                    Aparecerán aquí cuando la cierre.
+                  </p>
+                }
+                @if (esPaciente() && sesion.estado === 'PENDIENTE') {
+                  <p class="dato">
+                    Aún no tiene cita. Pide una desde «Pedir cita» y se enlazará sola cuando la
+                    atiendan.
+                  </p>
+                }
               </div>
             </li>
           }
@@ -135,28 +153,67 @@ const ESTADOS: Record<EstadoSesion, { texto: string; icono: string }> = {
   styles: `
     :host {
       display: block;
-      max-width: 44rem;
+      max-width: 60rem;
     }
     .volver {
       margin: 0 0 0.5rem -0.75rem;
     }
+    .encabezado {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: var(--space-5);
+      margin: var(--space-4) 0 var(--space-6);
+    }
+    .encabezado .texto {
+      flex: 1 1 20rem;
+      min-width: 0;
+    }
+    .dc-spec-tile.grande {
+      width: 3.5rem;
+      height: 3.5rem;
+    }
+    .rotulo {
+      margin: 0 0 var(--space-1);
+      font: var(--text-overline);
+      letter-spacing: 0.08em;
+      color: var(--spec, var(--ink-muted));
+    }
     h1 {
-      margin: 0 0 0.25rem;
+      margin: 0 0 var(--space-1);
+      font: var(--text-display-sm);
+      letter-spacing: -0.01em;
     }
     h2 {
-      margin: 1.5rem 0 0.5rem;
-      font-size: 1.125rem;
+      margin: var(--space-6) 0 var(--space-3);
+      font: var(--text-title-lg);
     }
     h3 {
       margin: 0;
-      font-size: 1rem;
+      font: var(--text-title-sm);
     }
-    /* Color propio en vez de opacidad, para no bajar del 4.5:1 de contraste. */
+    .avance {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5) var(--space-6);
+    }
+    .avance h2 {
+      margin-top: 0;
+    }
+    .avance mat-progress-bar {
+      --mat-progress-bar-track-height: 10px;
+      --mat-progress-bar-active-indicator-height: 10px;
+      --mat-progress-bar-track-shape: 999px;
+      --mat-progress-bar-active-indicator-color: var(--brand);
+      --mat-progress-bar-track-color: var(--surface-sunken);
+      border-radius: var(--radius-pill);
+    }
     .dato,
     .estado {
       margin: 0.15rem 0;
-      font-size: 0.875rem;
-      color: var(--mat-sys-on-surface-variant, #45464f);
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
       overflow-wrap: anywhere;
     }
     .estado-plan,
@@ -172,12 +229,16 @@ const ESTADOS: Record<EstadoSesion, { texto: string; icono: string }> = {
       height: 1.125rem;
     }
     .cifra {
-      margin: 0 0 0.5rem;
-      font-size: 1rem;
+      margin: 0 0 var(--space-3);
+      font: var(--text-body);
+    }
+    .cifra strong {
+      font: 700 1.375rem/1 var(--font-display);
     }
     .aviso {
-      margin: 0.75rem 0 0;
-      font-size: 0.875rem;
+      margin: var(--space-3) 0 0;
+      font: var(--text-body-sm);
+      color: var(--warning-ink);
     }
     .subtitulo {
       margin: 0.5rem 0 0;
@@ -196,42 +257,81 @@ const ESTADOS: Record<EstadoSesion, { texto: string; icono: string }> = {
     }
     .sesion {
       display: grid;
-      grid-template-columns: 2rem 1fr;
-      gap: 0.75rem;
-      padding-bottom: 1rem;
+      grid-template-columns: 2.5rem minmax(0, 1fr);
+      gap: var(--space-4);
       position: relative;
     }
-    /* El hilo que une las sesiones, detrás de sus marcas. */
     .sesion:not(:last-child)::before {
       content: '';
       position: absolute;
-      left: calc(1rem - 1px);
-      top: 2rem;
+      left: calc(1.25rem - 1px);
+      top: 2.75rem;
       bottom: 0;
       width: 2px;
-      background: var(--mat-sys-outline-variant, #c4c6d0);
+      background: var(--border);
+    }
+    .marca {
+      width: 2.5rem;
+      height: 2.5rem;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-pill);
+      border: 2px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--ink-muted);
     }
     .marca mat-icon {
-      width: 2rem;
-      height: 2rem;
-      font-size: 2rem;
-      color: var(--mat-sys-outline, #74777f);
+      width: 1.25rem;
+      height: 1.25rem;
+      font-size: 1.25rem;
     }
-    .cerrada .marca mat-icon {
-      color: var(--mat-sys-primary, #005cbb);
+    .cerrada .marca {
+      background: var(--success);
+      border-color: var(--success);
+      color: var(--on-success);
     }
-    .atendida .marca mat-icon,
+    .atendida .marca {
+      border-color: var(--warning);
+      color: var(--warning-ink);
+    }
     .atendida .estado {
-      color: var(--mat-sys-tertiary, #6b5778);
+      color: var(--warning-ink);
+      font-weight: 600;
     }
-    .atendida .estado {
+    .cerrada .estado {
+      color: var(--success-ink);
       font-weight: 600;
     }
     .contenido {
       min-width: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-4) var(--space-5);
+      margin-bottom: var(--space-4);
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
+    }
+    @media (max-width: 45rem) {
+      .avance {
+        padding: var(--space-5);
+      }
+      .sesion {
+        grid-template-columns: 2rem minmax(0, 1fr);
+        gap: var(--space-3);
+      }
+      .marca {
+        width: 2rem;
+        height: 2rem;
+      }
+      .sesion:not(:last-child)::before {
+        left: calc(1rem - 1px);
+        top: 2.25rem;
+      }
+      .contenido {
+        padding: var(--space-4);
+      }
     }
   `,
 })
@@ -239,6 +339,9 @@ export class PlanAvance {
   private readonly servicio = inject(PlanService);
   private readonly ruta = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
+  private readonly publico = inject(PublicoService);
+
+  private readonly especialidades = signal<ReadonlyMap<string, string>>(new Map());
 
   protected readonly estados = ESTADOS;
   protected readonly plan = signal<Plan | null>(null);
@@ -246,6 +349,14 @@ export class PlanAvance {
   protected readonly error = signal<string | null>(null);
 
   protected readonly esPaciente = computed(() => this.auth.rol() === 'PACIENTE');
+
+  // De la especialidad del tratamiento salen el color y el icono de la cabecera.
+  protected readonly especialidad = computed(() => {
+    const p = this.plan();
+    return p ? (this.especialidades().get(p.tratamiento.id) ?? null) : null;
+  });
+
+  protected readonly visual = computed(() => visualDeEspecialidad(this.especialidad()));
 
   protected readonly porcentaje = computed(() => {
     const p = this.plan();
@@ -257,11 +368,6 @@ export class PlanAvance {
     return p ? sesionesPorCerrar(p) : 0;
   });
 
-  /**
-   * Adónde se vuelve depende de por dónde se llegó, y eso lo dice el rol: el
-   * paciente viene de sus tratamientos, el odontólogo de su seguimiento y
-   * administración de la ficha del paciente, que es donde ve los planes.
-   */
   protected readonly volver = computed(() => {
     switch (this.auth.rol()) {
       case 'PACIENTE':
@@ -279,6 +385,7 @@ export class PlanAvance {
 
   constructor() {
     this.cargar();
+    especialidadPorTratamiento(this.publico).subscribe((mapa) => this.especialidades.set(mapa));
   }
 
   private cargar(): void {
@@ -296,10 +403,6 @@ export class PlanAvance {
     });
   }
 
-  /**
-   * El 403 de este recurso cubre también el plan que no existe, así que el
-   * mensaje no puede afirmar que es de otra persona.
-   */
   private mensaje(err: unknown): string {
     if (err instanceof HttpErrorResponse && err.status === 403) {
       return 'No puedes consultar este plan de tratamiento.';

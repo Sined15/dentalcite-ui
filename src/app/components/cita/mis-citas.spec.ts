@@ -64,9 +64,6 @@ describe('MisCitas', () => {
   beforeEach(() => TestBed.resetTestingModule());
 
   it('no manda la ficha ni el rango: el servidor saca la ficha del token', async () => {
-    // Sin rango aunque aqui solo se pinten las proximas: `desde` es por dia y
-    // habria que descartar igualmente las de esta misma mañana. Y mandar la
-    // ficha permitiria pedir las de otro.
     TestBed.configureTestingModule({
       imports: [MisCitas],
       providers: [
@@ -93,14 +90,10 @@ describe('MisCitas', () => {
     await montar([cita('c-1', 7), cita('c-2', -30, 'ATENDIDA', false)]);
 
     expect(componente.futuras().map((c) => c.id)).toEqual(['c-1']);
-    // Ni en la lista ni en la pantalla: aqui es donde se cancela, y una cita de
-    // hace un mes solo enterraria las que todavia se pueden tocar.
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('CIT-000002');
   });
 
   it('ordena las proximas de la mas cercana a la mas lejana', async () => {
-    // El servidor las devuelve de la mas reciente a la mas antigua; entre las
-    // futuras eso deja la mas lejana primero, que no es lo que se quiere ver.
     await montar([cita('c-3', 30), cita('c-2', 14), cita('c-1', 2)]);
 
     expect(componente.futuras().map((c) => c.id)).toEqual(['c-1', 'c-2', 'c-3']);
@@ -115,8 +108,6 @@ describe('MisCitas', () => {
   });
 
   it('RN-06: fuera de la ventana no pinta el boton y dice a donde acudir', async () => {
-    // Un boton deshabilitado sin explicacion obliga a llamar para averiguar por
-    // que; el aviso lo dice antes.
     await montar([cita('c-1', 1, 'CONFIRMADA', false)]);
 
     const raiz = fixture.nativeElement as HTMLElement;
@@ -133,7 +124,6 @@ describe('MisCitas', () => {
   });
 
   it('al cancelar abre el dialogo sin nombrar al paciente', async () => {
-    // Es quien esta mirando: decirselo sobra.
     await montar([cita('c-1', 7)]);
 
     componente.cancelar(componente.futuras()[0]);
@@ -144,7 +134,6 @@ describe('MisCitas', () => {
   });
 
   it('tras cancelar vuelve a pedir la lista', async () => {
-    // Cancelar una puede cambiar si las demas se pueden cancelar.
     await montar([cita('c-1', 7)]);
 
     componente.cancelar(componente.futuras()[0]);

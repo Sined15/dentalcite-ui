@@ -6,58 +6,96 @@ import { RouterLink } from '@angular/router';
 import { mensajeDeError } from '../../core/http/api-error';
 import { TratamientoPublico } from '../../models';
 import { PublicoService } from '../../services/publico.service';
+import { visualDeEspecialidad } from '../../shared/especialidad-visual';
 
-/**
- * La portada (HU-06, v4). Muestra **los tratamientos que la clinica ofrece**, que
- * es donde el informe situa el catalogo para el visitante; «mis tratamientos», en
- * el menu del paciente, son otra cosa: sus planes.
- *
- * Se carga sin token. Si la peticion falla, la pagina lo dice y sigue navegable:
- * una portada en blanco no distingue «no hay nada» de «algo se rompio».
- */
 @Component({
   selector: 'app-portada',
   imports: [RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule],
   template: `
-    <section class="titular">
-      <h1>Cuida tu sonrisa en DentalCite</h1>
-      <p>
-        Consulta nuestras especialidades, conoce al equipo y reserva tu cita en línea.
-        Para reservar necesitarás una cuenta; ver todo esto, no.
-      </p>
-      <div class="acciones">
-        <a mat-flat-button color="primary" routerLink="/nuestras-especialidades">
-          Ver especialidades
-        </a>
-        <a mat-stroked-button routerLink="/nuestro-equipo">Conocer al equipo</a>
+    <section class="heroe">
+      <div class="heroe-texto">
+        <p class="rotulo">CLÍNICA DENTAL</p>
+        <h1>Cuida tu sonrisa en DentalCite</h1>
+        <p class="entradilla">
+          Consulta nuestras especialidades, conoce al equipo y reserva tu cita en línea.
+          Para reservar necesitarás una cuenta; ver todo esto, no.
+        </p>
+        <div class="acciones">
+          <a mat-flat-button routerLink="/disponibilidad">
+            <mat-icon aria-hidden="true">event_available</mat-icon>
+            Pedir cita
+          </a>
+          <a mat-stroked-button routerLink="/nuestras-especialidades">Ver especialidades</a>
+          <a mat-button routerLink="/nuestro-equipo">Conocer al equipo</a>
+        </div>
+        <ul class="datos">
+          <li>
+            <mat-icon aria-hidden="true">visibility</mat-icon>
+            <span>Puedes ver tratamientos, equipo y horarios sin cuenta.</span>
+          </li>
+          <li>
+            <mat-icon aria-hidden="true">keyboard_return</mat-icon>
+            <span>Al iniciar sesión volverás aquí, con la misma hora elegida.</span>
+          </li>
+        </ul>
       </div>
+
+      <aside class="pasos" aria-labelledby="titulo-pasos">
+        <h2 id="titulo-pasos">Reservar toma tres pasos</h2>
+        <ol>
+          <li>
+            <span class="numero" aria-hidden="true">1</span>
+            <div>
+              <h3>Elige un tratamiento</h3>
+              <p>Mira la duración y qué especialidad lo ejerce.</p>
+            </div>
+          </li>
+          <li>
+            <span class="numero" aria-hidden="true">2</span>
+            <div>
+              <h3>Mira las franjas</h3>
+              <p>Compara días y odontólogos sin iniciar sesión.</p>
+            </div>
+          </li>
+          <li>
+            <span class="numero" aria-hidden="true">3</span>
+            <div>
+              <h3>Identifícate y confirma</h3>
+              <p>Al entrar volverás a la hora que elegiste.</p>
+            </div>
+          </li>
+        </ol>
+      </aside>
     </section>
 
-    <h2>Tratamientos que ofrecemos</h2>
+    <section class="seccion" aria-labelledby="titulo-tratamientos">
+      <h2 id="titulo-tratamientos">Tratamientos que ofrecemos</h2>
+      <p class="subtitulo">
+        Cada especialidad tiene su color y su icono para que la reconozcas antes de leer.
+      </p>
 
-    @if (cargando()) {
-      <mat-progress-bar mode="indeterminate" aria-label="Cargando tratamientos" />
-    }
+      @if (cargando()) {
+        <mat-progress-bar mode="indeterminate" aria-label="Cargando tratamientos" />
+      }
 
-    @if (error(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
+      @if (error(); as mensaje) {
+        <p class="error" role="alert">{{ mensaje }}</p>
+      }
 
-    @if (!cargando() && !error() && tratamientos().length === 0) {
-      <p>Todavía no hay tratamientos publicados.</p>
-    }
+      @if (!cargando() && !error() && tratamientos().length === 0) {
+        <p>Todavía no hay tratamientos publicados.</p>
+      }
 
-    <ul class="rejilla">
-      @for (tratamiento of tratamientos(); track tratamiento.id) {
-        <li class="tarjeta">
-          @if (tratamiento.imagenUrl) {
-            <img [src]="tratamiento.imagenUrl" alt="" />
-          } @else {
-            <div class="marcador" aria-hidden="true"><mat-icon>medical_services</mat-icon></div>
-          }
-          <div class="cuerpo">
-            <h3>{{ tratamiento.nombre }}</h3>
-            <p class="especialidad">{{ tratamiento.especialidadNombre }}</p>
+      <ul class="rejilla dc-grid">
+        @for (tratamiento of tratamientos(); track tratamiento.id) {
+          <li class="tarjeta" [attr.data-spec]="visual(tratamiento).clave">
+            <p class="rotulo-spec">{{ tratamiento.especialidadNombre.toUpperCase() }}</p>
+            <div class="cabecera-tarjeta">
+              <span class="dc-spec-tile" aria-hidden="true">
+                <mat-icon>{{ visual(tratamiento).icono }}</mat-icon>
+              </span>
+              <h3>{{ tratamiento.nombre }}</h3>
+            </div>
             @if (tratamiento.descripcion) {
               <p class="descripcion">{{ tratamiento.descripcion }}</p>
             }
@@ -71,96 +109,202 @@ import { PublicoService } from '../../services/publico.service';
             >
               Ver especialidad
             </a>
-          </div>
-        </li>
-      }
-    </ul>
+          </li>
+        }
+      </ul>
+    </section>
   `,
   styles: `
-    .titular {
-      padding: 1.5rem 0 2rem;
-      max-width: 42rem;
+    :host {
+      display: block;
     }
-    .titular h1 {
-      margin: 0 0 0.5rem;
-      font-size: 2rem;
-      line-height: 1.2;
+    .heroe {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      gap: var(--space-12);
+      align-items: center;
+      padding-block: var(--space-10) var(--space-8);
+    }
+    .heroe-texto {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+    .rotulo {
+      margin: 0;
+      font: var(--text-overline);
+      letter-spacing: 0.08em;
+      color: var(--brand-ink);
+    }
+    h1 {
+      margin: 0;
+      font: var(--text-display-lg);
+      font-size: clamp(2rem, 5vw, 2.75rem);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+    .entradilla {
+      margin: 0;
+      max-width: var(--layout-prose);
+      font: var(--text-body-lg);
+      color: var(--ink-muted);
     }
     .acciones {
       display: flex;
-      gap: 0.75rem;
       flex-wrap: wrap;
-      margin-top: 1rem;
+      gap: var(--space-3);
+      align-items: center;
     }
-    h2 {
-      font-size: 1.35rem;
-      margin: 1rem 0;
+    .datos {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: var(--space-3);
+    }
+    .datos li {
+      display: flex;
+      gap: var(--space-3);
+      align-items: flex-start;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .datos mat-icon {
+      flex: none;
+      color: var(--brand-ink);
+    }
+    .pasos {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      box-shadow: var(--shadow-sm);
+    }
+    .pasos h2 {
+      margin: 0 0 var(--space-4);
+      font: var(--text-title-md);
+    }
+    .pasos ol {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: var(--space-4);
+    }
+    .pasos li {
+      display: flex;
+      gap: var(--space-4);
+      align-items: flex-start;
+    }
+    .numero {
+      flex: none;
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: var(--radius-pill);
+      background: var(--brand-soft);
+      color: var(--on-brand-soft);
+      display: grid;
+      place-items: center;
+      font: 700 1rem/1 var(--font-display);
+    }
+    .pasos h3 {
+      margin: 0;
+      font: var(--text-title-sm);
+    }
+    .pasos p {
+      margin: var(--space-1) 0 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
+    }
+    .seccion {
+      padding-block: var(--space-8);
+    }
+    .seccion h2 {
+      margin: 0;
+      font: var(--text-title-lg);
+    }
+    .subtitulo {
+      margin: var(--space-2) 0 var(--space-8);
+      max-width: var(--layout-prose);
+      color: var(--ink-muted);
     }
     .rejilla {
       list-style: none;
       margin: 0;
       padding: 0;
-      display: grid;
-      gap: 1.25rem;
-      grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
     }
     .tarjeta {
-      border: 1px solid var(--mat-sys-outline-variant, #d9d9d9);
-      border-radius: 0.75rem;
-      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
       display: flex;
       flex-direction: column;
+      gap: var(--space-3);
     }
-    .tarjeta img,
-    .marcador {
-      width: 100%;
-      aspect-ratio: 3 / 2;
-      object-fit: cover;
-      display: block;
+    .tarjeta:hover {
+      box-shadow: var(--shadow-sm);
+      border-color: var(--border-strong);
     }
-    .marcador {
-      display: grid;
-      place-items: center;
-      background: var(--mat-sys-surface-variant, #eceff1);
+    .rotulo-spec {
+      margin: 0;
+      font: var(--text-overline);
+      letter-spacing: 0.08em;
+      color: var(--spec);
     }
-    .cuerpo {
-      padding: 0.85rem 1rem 1rem;
+    .cabecera-tarjeta {
       display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      flex: 1;
+      align-items: center;
+      gap: var(--space-3);
     }
-    .cuerpo h3 {
+    .cabecera-tarjeta h3 {
       margin: 0;
-      font-size: 1.05rem;
-    }
-    .especialidad {
-      margin: 0;
-      font-size: 0.85rem;
-      opacity: 0.75;
+      font: var(--text-title-sm);
+      min-width: 0;
     }
     .descripcion {
       margin: 0;
-      font-size: 0.9rem;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
     .duracion {
       display: flex;
       align-items: center;
-      gap: 0.35rem;
-      margin: 0.25rem 0 0.5rem;
-      font-size: 0.9rem;
+      gap: var(--space-1);
+      margin: 0;
+      font: var(--text-label);
+      color: var(--ink-muted);
     }
     .duracion mat-icon {
-      font-size: 1.1rem;
-      width: 1.1rem;
-      height: 1.1rem;
+      width: 1.125rem;
+      height: 1.125rem;
+      font-size: 1.125rem;
     }
-    .cuerpo a {
+    .tarjeta a {
       margin-top: auto;
       align-self: flex-start;
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
+    }
+    @media (max-width: 56rem) {
+      .heroe {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-8);
+        padding-block: var(--space-6) var(--space-4);
+      }
+    }
+    @media (max-width: 37.5rem) {
+      .acciones a {
+        flex: 1 1 100%;
+        min-height: 3rem;
+      }
+      .pasos {
+        padding: var(--space-5);
+      }
+      .seccion {
+        padding-block: var(--space-6);
+      }
     }
   `,
 })
@@ -170,6 +314,10 @@ export class Portada implements OnInit {
   protected readonly tratamientos = signal<TratamientoPublico[]>([]);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  protected visual(tratamiento: TratamientoPublico) {
+    return visualDeEspecialidad(tratamiento.especialidadNombre);
+  }
 
   ngOnInit(): void {
     this.cargando.set(true);

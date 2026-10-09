@@ -84,7 +84,6 @@ function pagina<T>(content: T[]): PageResponse<T> {
   };
 }
 
-/** JWT sin firmar: solo se decodifica el payload, como en auth.guards.spec.ts. */
 function sesionCon(rol: string): string {
   const b64 = (o: unknown) =>
     btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -154,7 +153,6 @@ describe('PlanEdit', () => {
   });
 
   it('como odontologo no pide la lista de odontologos ni pinta el selector', () => {
-    // Planifica en su propio nombre: el campo no existe para el.
     montar('ODONTOLOGO');
 
     expect(componente.planificaParaOtro()).toBe(false);
@@ -162,7 +160,6 @@ describe('PlanEdit', () => {
   });
 
   it('como odontologo envia el plan sin odontologoId', () => {
-    // El servidor responde 403 a un ODONTOLOGO que lo mande, aunque sea el suyo.
     montar('ODONTOLOGO');
     componente.formulario.patchValue({ tratamientoId: 'tra-1', sesionesPrevistas: 6 });
 
@@ -226,8 +223,6 @@ describe('PlanEdit', () => {
   });
 
   it('RN-13: ante el 409 muestra el motivo y no cierra el dialogo', () => {
-    // El mensaje dice que hay que suspender el plan en curso: quien planifica
-    // necesita leerlo para saber que hacer.
     montar('ODONTOLOGO');
     componente.formulario.patchValue({ tratamientoId: 'tra-1', sesionesPrevistas: 6 });
 

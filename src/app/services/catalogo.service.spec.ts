@@ -9,14 +9,6 @@ import { OdontologoService } from './odontologo.service';
 import { TratamientoService } from './tratamiento.service';
 import { UsuarioService } from './usuario.service';
 
-/**
- * Fija la forma de las llamadas al backend.
- *
- * Lo que se comprueba aqui son las decisiones que un cambio distraido rompe sin
- * dar error de compilacion: que la baja del catalogo sea `PATCH` sin cuerpo y no
- * un `DELETE` —que no existe—, que los horarios cuelguen de su odontologo, y
- * que los parametros de paginacion viajen como el servidor los espera.
- */
 const API = environment.apiUrl;
 
 describe('servicios de la API', () => {
@@ -50,7 +42,6 @@ describe('servicios de la API', () => {
       servicio.listar().subscribe();
       const req = httpMock.expectOne((r) => r.url === `${API}/api/v1/especialidades`);
       expect(req.request.params.has('sort')).toBe(false);
-      // Valores por defecto del backend.
       expect(req.request.params.get('page')).toBe('0');
       expect(req.request.params.get('size')).toBe('20');
       req.flush({ content: [], totalElements: 0 });

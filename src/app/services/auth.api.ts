@@ -5,10 +5,6 @@ import { environment } from '../../environments/environment';
 import { MessageResponse } from '../core/http/api.types';
 import { LoginRequest, RegistroRequest, TokenResponse } from '../models';
 
-/**
- * Frontera HTTP de `/api/v1/auth`. La gestion de sesion vive en
- * `core/auth/auth.service.ts`; esto solo habla con la API.
- */
 @Injectable({ providedIn: 'root' })
 export class AuthApi {
   private readonly http = inject(HttpClient);
@@ -22,7 +18,6 @@ export class AuthApi {
     return this.http.post<MessageResponse>(`${this.url}/registro`, body);
   }
 
-  /** Invalida en servidor todos los tokens emitidos antes de este instante. */
   logout(): Observable<void> {
     return this.http.post<void>(`${this.url}/logout`, null);
   }

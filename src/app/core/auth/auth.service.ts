@@ -7,13 +7,6 @@ import { MessageResponse } from '../http/api.types';
 
 const CLAVE_TOKEN = 'dentalcite.token';
 
-/**
- * Estado de sesion del cliente.
- *
- * El JWT se decodifica aqui solo para saber a donde navegar: la firma no se
- * verifica y no se puede verificar sin el secreto. La autoridad sobre lo que
- * un usuario puede hacer es siempre el backend, que revalida cada peticion.
- */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly api = inject(AuthApi);
@@ -34,7 +27,6 @@ export class AuthService {
     () => this.claims()?.requiere_cambio_password === true,
   );
 
-  /** Un token caducado o ilegible cuenta como ausencia de sesion. */
   readonly estaAutenticado = computed<boolean>(() => {
     const claims = this.claims();
     if (!claims) {
@@ -42,6 +34,12 @@ export class AuthService {
     }
     return claims.exp * 1000 > Date.now();
   });
+
+  tokenVigente(): string | null {
+    const token = this._token();
+    const claims = this.claims();
+    return token && claims && claims.exp * 1000 > Date.now() ? token : null;
+  }
 
   login(body: LoginRequest): Observable<{ token: string }> {
     return this.api.login(body).pipe(tap((res) => this.guardarToken(res.token)));
@@ -51,11 +49,6 @@ export class AuthService {
     return this.api.registrar(body);
   }
 
-  /**
-   * Cierra sesion en servidor y en cliente. La sesion local muere aunque la
-   * llamada falle: dejarla viva con un token que el backend ya revoco solo
-   * produciria 401 en la siguiente pantalla.
-   */
   logout(): void {
     this.api.logout().subscribe({
       next: () => this.limpiarYSalir(),
@@ -63,17 +56,13 @@ export class AuthService {
     });
   }
 
-  /** Cierre local, sin llamar al backend. Lo usa el interceptor ante un 401. */
   limpiarSesion(): void {
     this._token.set(null);
     try {
       localStorage.removeItem(CLAVE_TOKEN);
-    } catch {
-      // Almacenamiento no disponible: la senal ya es la fuente de verdad.
-    }
+    } catch {}
   }
 
-  /** Ruta inicial segun el rol, para no aterrizar en una pantalla sin permiso. */
   rutaInicial(): string {
     switch (this.rol()) {
       case 'ADMINISTRADOR':
@@ -93,20 +82,9 @@ export class AuthService {
     this._token.set(token);
     try {
       localStorage.setItem(CLAVE_TOKEN, token);
-    } catch {
-      // Modo privado o almacenamiento bloqueado: la sesion vive solo en memoria.
-    }
+    } catch {}
   }
 
-  /**
-   * El cierre **voluntario**, y por eso deja al usuario en la portada y no en el
-   * formulario de acceso: quien pulsa «cerrar sesion» se esta yendo, no pidiendo
-   * volver a entrar, y desde la revision v4 hay un sitio publico donde dejarlo.
-   *
-   * Los otros dos cierres siguen yendo a `/login` y no pasan por aqui, porque
-   * ahi el usuario estaba a mitad de algo: el interceptor cuando el backend
-   * revoca el token, y el cambio de la contraseña provisional.
-   */
   private limpiarYSalir(): void {
     this.limpiarSesion();
     void this.router.navigate(['/']);
@@ -121,7 +99,6 @@ function leerTokenGuardado(): string | null {
   }
 }
 
-/** Decodifica el payload de un JWT. Devuelve null si no es legible. */
 function decodificarJwt(token: string): JwtClaims | null {
   try {
     const payload = token.split('.')[1];

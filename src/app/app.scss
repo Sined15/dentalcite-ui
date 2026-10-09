@@ -1,24 +1,43 @@
 .contenedor {
-  // `100dvh` y no `100vh`: en un movil la barra del navegador se retrae al
-  // desplazar, y con `vh` el shell quedaba mas alto que la ventana visible.
   height: 100dvh;
+  background: var(--surface-page);
 }
 
 .lateral {
-  width: 15rem;
+  width: 16.5rem;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
 }
 
 .marca {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  font-size: 1.125rem;
-  font-weight: 600;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  font: 700 1.1875rem/1 var(--font-display);
+  letter-spacing: -0.01em;
+
+  b {
+    color: var(--brand-ink);
+  }
 }
 
-// La cabecera de un grupo es un `button`: sin esto traeria el fondo y el borde
-// del navegador y rompeia la fila de la lista.
+.sello {
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: var(--radius-sm);
+  background: var(--brand);
+  color: var(--on-brand);
+  display: grid;
+  place-items: center;
+
+  mat-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    font-size: 1.125rem;
+  }
+}
+
 .grupo {
   width: 100%;
   background: none;
@@ -29,16 +48,41 @@
   cursor: pointer;
 }
 
-// Un hijo activo se resalta solo (`[activated]`), pero con el grupo plegado no
-// quedaria rastro de donde esta el usuario; esto lo suple en la cabecera.
+// La lista de Material pisa la tipografía de todo lo que lleva `mdc-list-item__end`:
+// sin esto el chevron del grupo se ve como el texto «expand_more» recortado.
+.grupo .mat-icon.mdc-list-item__end {
+  font-family: 'Material Icons';
+  font-size: 1.5rem;
+  letter-spacing: normal;
+}
+
 .grupo-activo {
   font-weight: 600;
 }
 
-// Sangria, y no color, para que se lea como lo que cuelga del grupo: el color
-// solo no distingue nada para quien no lo percibe.
 .hijo {
   padding-left: 1.5rem;
+}
+
+// Entradas del menú: pastilla suave de marca para la activa, no el azul genérico.
+mat-nav-list {
+  --mat-list-list-item-container-shape: var(--radius-md);
+  --mat-list-active-indicator-shape: var(--radius-md);
+  --mat-list-active-indicator-color: var(--brand-soft);
+  --mat-list-list-item-label-text-color: var(--ink-muted);
+  --mat-list-list-item-leading-icon-color: var(--ink-muted);
+  --mat-list-list-item-focus-label-text-color: var(--ink);
+  --mat-list-list-item-hover-label-text-color: var(--ink);
+  padding-inline: var(--space-3);
+}
+
+// Rótulo de grupo del menú del personal (ADMINISTRACIÓN, CITAS…).
+.rotulo {
+  margin: 0;
+  padding: var(--space-4) var(--space-3) var(--space-1);
+  font: var(--text-overline);
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
 }
 
 .barra {
@@ -46,14 +90,16 @@
   top: 0;
   z-index: 2;
   gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .marca-barra {
-  font-size: 1.0625rem;
-  font-weight: 600;
-  // Solo cuando el cajon esta superpuesto: si esta a la vista, su cabecera ya
-  // lleva la marca y repetirla es ruido.
+  font: 700 1.0625rem/1 var(--font-display);
   display: none;
+
+  b {
+    color: var(--brand-ink);
+  }
 }
 
 .expansor {
@@ -61,39 +107,75 @@
 }
 
 .rol {
-  font-size: 0.8125rem;
-  opacity: 0.85;
+  font: var(--text-label);
+  color: var(--on-brand-soft);
+  background: var(--brand-soft);
+  border-radius: var(--radius-pill);
+  padding: 0.375rem var(--space-3);
   margin-right: 0.5rem;
   white-space: nowrap;
 }
 
 .contenido {
   display: block;
-  padding: 1.5rem;
-  // Contiene el desbordamiento lateral en la zona de contenido, para que una
-  // tabla ancha lo resuelva dentro de su `.tabla-scroll` en vez de empujar la
-  // barra pegajosa fuera de la ventana.
+  padding: var(--space-8) var(--space-6) var(--space-12);
   overflow-x: hidden;
 }
 
-// Cajon superpuesto: la marca pasa a la barra, que es lo unico visible.
+.pestanas {
+  display: none;
+}
+
+@media (max-width: 47.99rem) {
+  // Barra inferior del paciente: el pulgar llega y la página actual se ve de un vistazo.
+  .pestanas {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+
+    a {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-height: 3.5rem;
+      color: var(--ink-muted);
+      text-decoration: none;
+      font: 500 0.6875rem/1 var(--font-sans);
+    }
+
+    a.activa {
+      color: var(--brand-ink);
+    }
+
+    mat-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+      font-size: 1.5rem;
+    }
+  }
+}
+
 @media (max-width: 56.24rem) {
   .marca-barra {
     display: inline;
   }
   .contenido {
-    padding: 1rem;
+    padding: var(--space-5) var(--space-4) var(--space-10);
   }
 }
 
-// Moviles estrechos: el rol compite con los botones por el ancho y es
-// informativo, no accionable. El menu de cuenta lo sigue mostrando.
 @media (max-width: 26rem) {
   .rol {
     display: none;
   }
   .contenido {
-    padding: 0.75rem;
+    padding: var(--space-4) var(--space-3) var(--space-8);
   }
   .marca-barra {
     font-size: 1rem;

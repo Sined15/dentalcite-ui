@@ -5,15 +5,6 @@ import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { Cita } from '../../models';
 
-/**
- * El comprobante de la reserva (HU-09 · RF-15: «un codigo unico que vere en
- * pantalla»).
- *
- * Se ofrece copiar el codigo, como en la contrasena provisional. La diferencia
- * es que este no se pierde al cerrar: la pantalla de disponibilidad lo conserva
- * en un aviso, porque el listado de citas propias es HU-15 y hasta entonces no
- * hay donde volver a consultarlo.
- */
 @Component({
   selector: 'app-cita-reservada-dialogo',
   imports: [DatePipe, MatButtonModule, MatDialogModule, MatIconModule],
@@ -49,7 +40,7 @@ import { Cita } from '../../models';
       </dl>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-flat-button color="primary" type="button" mat-dialog-close>Entendido</button>
+      <button mat-flat-button type="button" mat-dialog-close>Entendido</button>
     </mat-dialog-actions>
   `,
   styles: `
@@ -57,31 +48,29 @@ import { Cita } from '../../models';
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      border-radius: 0.5rem;
-      background: var(--mat-sys-surface-container-highest, #e2e2e6);
-      margin-bottom: 1rem;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      background: var(--surface-sunken);
+      margin-bottom: var(--space-4);
     }
     code {
-      font-size: 1.25rem;
-      letter-spacing: 0.05em;
+      font: 600 1.375rem/1.75rem var(--font-mono);
+      letter-spacing: 0.04em;
     }
     dl {
       display: grid;
       grid-template-columns: auto 1fr;
-      gap: 0.35rem 1rem;
+      gap: var(--space-2) var(--space-5);
       margin: 0;
     }
-    /* Ver la nota de reservar-dialogo: la opacidad no llegaba al 4.5:1 de RNF-08. */
     dt {
-      font-size: 0.8125rem;
-      color: var(--mat-sys-on-surface-variant, #45464f);
+      font: var(--text-label);
+      color: var(--ink-muted);
     }
     dd {
       margin: 0;
     }
-    /* A 360 px las dos columnas aprietan: se apilan. */
     @media (max-width: 26rem) {
       dl {
         grid-template-columns: 1fr;

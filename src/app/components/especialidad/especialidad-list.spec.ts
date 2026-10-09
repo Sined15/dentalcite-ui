@@ -9,20 +9,12 @@ import { PageResponse } from '../../core/http/api.types';
 import { Especialidad } from '../../models';
 import { EspecialidadList } from './especialidad-list';
 
-/**
- * Regresión del filtro.
- *
- * El listado filtraba solo sobre la página cargada, así que buscar un registro
- * que estuviera a partir de la fila 21 no devolvía nada. Estas pruebas fijan que
- * se recorre el conjunto completo y que la paginación es de cliente.
- */
 const API = `${environment.apiUrl}/api/v1/especialidades`;
 
 function especialidad(nombre: string, i: number): Especialidad {
   return { id: `esp-${i}`, nombre, descripcion: null, activo: true, imagenUrl: null };
 }
 
-/** 25 especialidades: mas de una pagina del servidor, que sirve 20 por defecto. */
 const TODAS: Especialidad[] = [
   ...Array.from({ length: 24 }, (_, i) => especialidad(`Especialidad ${i + 1}`, i + 1)),
   especialidad('Ortodoncia', 25),
@@ -62,7 +54,6 @@ describe('EspecialidadList', () => {
     httpMock = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(EspecialidadList);
 
-    // El componente carga en el constructor: se responden las paginas que pida.
     for (let desde = 0; desde < TODAS.length; desde += 100) {
       const req = httpMock.expectOne((r) => r.url === API);
       req.flush(pagina(desde, 100));
@@ -82,7 +73,6 @@ describe('EspecialidadList', () => {
       filtro: { set: (v: string) => void };
       filas: () => Especialidad[];
     };
-    // «Ortodoncia» es la nº 25: antes del arreglo, filtrar no la encontraba.
     componente.filtro.set('ortodoncia');
     expect(componente.filas()).toHaveLength(1);
     expect(componente.filas()[0].nombre).toBe('Ortodoncia');
@@ -101,7 +91,6 @@ describe('EspecialidadList', () => {
     componente.indice.set(2);
     expect(componente.pagina()).toHaveLength(5);
 
-    // Ninguna peticion nueva: el conjunto ya estaba en memoria.
     httpMock.verify();
   });
 

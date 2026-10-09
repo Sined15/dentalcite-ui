@@ -1,27 +1,13 @@
-import { Component, OnInit, inject, input, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { mensajeDeError } from '../../core/http/api-error';
-import { EspecialidadDetalle } from '../../models';
+import { EspecialidadDetalle, OdontologoPublico } from '../../models';
 import { PublicoService } from '../../services/publico.service';
+import { visualDeEspecialidad } from '../../shared/especialidad-visual';
 
-/**
- * Una especialidad con sus tratamientos y sus odontologos (HU-06, v4). Es la
- * segunda mitad de «donde queda el catalogo de lo que la clinica ofrece»: en la
- * portada y dentro de cada especialidad.
- *
- * Los odontologos que aparecen son los que el motor de disponibilidad propondria
- * para esta especialidad (RN-08): el backend los resuelve con la misma consulta,
- * asi que la web no puede anunciar a alguien con quien luego no se pueda reservar.
- *
- * Cada tratamiento lleva su «pedir cita», que es el ultimo criterio de HU-06. El
- * destino es la pantalla de disponibilidad con el tratamiento ya elegido, y no un
- * formulario propio: la reserva vive en un solo sitio (HU-09, HU-14) y tenerla
- * dos veces seria mantenerla dos veces. El visitante la consulta sin cuenta, y
- * solo se le pide identificarse al elegir una franja, que le espera al volver.
- */
 @Component({
   selector: 'app-especialidad-detalle',
   imports: [RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule],
@@ -36,176 +22,223 @@ import { PublicoService } from '../../services/publico.service';
     }
 
     @if (detalle(); as especialidad) {
-      <nav class="migas">
-        <a routerLink="/nuestras-especialidades">Especialidades</a>
-        <span aria-hidden="true">/</span>
-        <span>{{ especialidad.nombre }}</span>
-      </nav>
+      <div [attr.data-spec]="visual().clave">
+        <nav class="migas" aria-label="Migas de pan">
+          <a routerLink="/">Inicio</a>
+          <mat-icon aria-hidden="true">chevron_right</mat-icon>
+          <a routerLink="/nuestras-especialidades">Especialidades</a>
+          <mat-icon aria-hidden="true">chevron_right</mat-icon>
+          <span aria-current="page">{{ especialidad.nombre }}</span>
+        </nav>
 
-      <header class="encabezado">
-        @if (especialidad.imagenUrl) {
-          <img [src]="especialidad.imagenUrl" alt="" />
-        }
-        <h1>{{ especialidad.nombre }}</h1>
-      </header>
-
-      <h2>Tratamientos</h2>
-      @if (especialidad.tratamientos.length === 0) {
-        <p>Esta especialidad no tiene tratamientos publicados.</p>
-      }
-      <ul class="lista">
-        @for (tratamiento of especialidad.tratamientos; track tratamiento.id) {
-          <li>
-            <h3>{{ tratamiento.nombre }}</h3>
-            @if (tratamiento.descripcion) {
-              <p>{{ tratamiento.descripcion }}</p>
-            }
-            <p class="duracion">
-              <mat-icon aria-hidden="true">schedule</mat-icon>
-              {{ tratamiento.duracionMinutos }} minutos
-            </p>
-            <a
-              mat-stroked-button
-              class="cta"
-              [routerLink]="['/disponibilidad']"
-              [queryParams]="{ tratamientoId: tratamiento.id }"
-            >
-              <mat-icon aria-hidden="true">event</mat-icon>
-              Pedir cita
-            </a>
-          </li>
-        }
-      </ul>
-
-      <h2>Quién la ejerce</h2>
-      @if (especialidad.odontologos.length === 0) {
-        <p>Ahora mismo ningún odontólogo tiene asignada esta especialidad.</p>
-      }
-      <ul class="equipo">
-        @for (odontologo of especialidad.odontologos; track odontologo.id) {
-          <li>
-            @if (odontologo.imagenUrl) {
-              <img [src]="odontologo.imagenUrl" alt="" />
+        <header class="encabezado">
+          <span class="dc-spec-tile grande" aria-hidden="true">
+            @if (especialidad.imagenUrl) {
+              <img [src]="especialidad.imagenUrl" alt="" />
             } @else {
-              <div class="marcador" aria-hidden="true"><mat-icon>person</mat-icon></div>
+              <mat-icon>{{ visual().icono }}</mat-icon>
             }
-            <div>
-              <h3>{{ odontologo.nombres }} {{ odontologo.apellidos }}</h3>
-              <p class="cop">{{ odontologo.cop }}</p>
-            </div>
-          </li>
-        }
-      </ul>
+          </span>
+          <div class="titulo">
+            <h1>{{ especialidad.nombre }}</h1>
+          </div>
+          <a mat-flat-button class="principal" routerLink="/disponibilidad">
+            <mat-icon aria-hidden="true">event_available</mat-icon>
+            Pedir cita
+          </a>
+        </header>
+
+        <section aria-labelledby="titulo-tratamientos">
+          <h2 id="titulo-tratamientos">Tratamientos</h2>
+          @if (especialidad.tratamientos.length === 0) {
+            <p class="vacio">Esta especialidad no tiene tratamientos publicados.</p>
+          }
+          <ul class="lista dc-grid">
+            @for (tratamiento of especialidad.tratamientos; track tratamiento.id) {
+              <li class="tarjeta">
+                <h3>{{ tratamiento.nombre }}</h3>
+                @if (tratamiento.descripcion) {
+                  <p class="descripcion">{{ tratamiento.descripcion }}</p>
+                }
+                <p class="duracion">
+                  <mat-icon aria-hidden="true">schedule</mat-icon>
+                  {{ tratamiento.duracionMinutos }} minutos
+                </p>
+                <a
+                  mat-stroked-button
+                  class="cta"
+                  [routerLink]="['/disponibilidad']"
+                  [queryParams]="{ tratamientoId: tratamiento.id }"
+                >
+                  <mat-icon aria-hidden="true">event</mat-icon>
+                  Pedir cita
+                </a>
+              </li>
+            }
+          </ul>
+        </section>
+
+        <section aria-labelledby="titulo-equipo">
+          <h2 id="titulo-equipo">Quién la ejerce</h2>
+          @if (especialidad.odontologos.length === 0) {
+            <p class="vacio">Ahora mismo ningún odontólogo tiene asignada esta especialidad.</p>
+          }
+          <ul class="equipo dc-grid">
+            @for (odontologo of especialidad.odontologos; track odontologo.id) {
+              <li class="profesional">
+                @if (odontologo.imagenUrl) {
+                  <img class="avatar" [src]="odontologo.imagenUrl" alt="" />
+                } @else {
+                  <span class="avatar" aria-hidden="true">{{ iniciales(odontologo) }}</span>
+                }
+                <div>
+                  <h3>{{ odontologo.nombres }} {{ odontologo.apellidos }}</h3>
+                  <p class="cop">{{ odontologo.cop }}</p>
+                </div>
+              </li>
+            }
+          </ul>
+        </section>
+      </div>
     }
   `,
   styles: `
     .migas {
       display: flex;
-      gap: 0.5rem;
-      font-size: 0.9rem;
-      margin-bottom: 1rem;
-      opacity: 0.85;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-1);
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
     .migas a {
-      color: inherit;
+      color: var(--brand-ink);
+    }
+    .migas mat-icon {
+      width: 1rem;
+      height: 1rem;
+      font-size: 1rem;
+      color: var(--ink-faint);
     }
     .encabezado {
       display: flex;
       align-items: center;
-      gap: 1rem;
-      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: var(--space-5);
+      margin: var(--space-5) 0 var(--space-2);
     }
-    .encabezado img {
-      width: 8rem;
-      aspect-ratio: 3 / 2;
+    .grande {
+      width: 3.5rem;
+      height: 3.5rem;
+      overflow: hidden;
+    }
+    .grande img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
-      border-radius: 0.5rem;
+      display: block;
     }
-    .encabezado h1 {
+    .titulo {
+      flex: 1 1 18rem;
+      min-width: 0;
+    }
+    h1 {
       margin: 0;
-      font-size: 1.75rem;
+      font: var(--text-display-md);
+      font-size: clamp(1.75rem, 3.4vw, 2.125rem);
+      letter-spacing: -0.015em;
     }
     h2 {
-      font-size: 1.2rem;
-      margin: 1.5rem 0 0.75rem;
+      margin: var(--space-10) 0 var(--space-5);
+      font: var(--text-title-lg);
+    }
+    .vacio {
+      color: var(--ink-muted);
     }
     .lista,
     .equipo {
       list-style: none;
       margin: 0;
       padding: 0;
-      display: grid;
-      gap: 1rem;
     }
-    .lista {
-      grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-    }
-    .lista li {
-      border: 1px solid var(--mat-sys-outline-variant, #d9d9d9);
-      border-radius: 0.75rem;
-      padding: 0.9rem 1rem;
+    .tarjeta {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
       display: flex;
       flex-direction: column;
       align-items: flex-start;
+      gap: var(--space-3);
     }
-    .cta {
-      margin-top: 0.35rem;
+    .tarjeta:hover {
+      box-shadow: var(--shadow-sm);
+      border-color: var(--border-strong);
     }
-    .lista h3,
-    .equipo h3 {
-      margin: 0 0 0.35rem;
-      font-size: 1rem;
+    .tarjeta h3,
+    .profesional h3 {
+      margin: 0;
+      font: var(--text-title-sm);
     }
-    .lista p {
-      margin: 0 0 0.35rem;
-      font-size: 0.9rem;
+    .descripcion {
+      margin: 0;
+      font: var(--text-body-sm);
+      color: var(--ink-muted);
     }
     .duracion {
       display: flex;
       align-items: center;
-      gap: 0.35rem;
+      gap: var(--space-1);
+      margin: 0;
+      font: var(--text-label);
+      color: var(--ink-muted);
     }
     .duracion mat-icon {
-      font-size: 1.1rem;
-      width: 1.1rem;
-      height: 1.1rem;
+      width: 1.125rem;
+      height: 1.125rem;
+      font-size: 1.125rem;
     }
-    .equipo {
-      grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    .cta {
+      margin-top: auto;
     }
-    .equipo li {
+    .profesional {
       display: flex;
       align-items: center;
-      gap: 0.85rem;
-      border: 1px solid var(--mat-sys-outline-variant, #d9d9d9);
-      border-radius: 0.75rem;
-      padding: 0.75rem 0.9rem;
+      gap: var(--space-4);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
     }
-    .equipo img,
-    .marcador {
-      width: 3.5rem;
-      height: 3.5rem;
-      border-radius: 50%;
-      object-fit: cover;
+    .avatar {
+      width: 3rem;
+      height: 3rem;
       flex: none;
-    }
-    .marcador {
+      border-radius: var(--radius-pill);
+      object-fit: cover;
       display: grid;
       place-items: center;
-      background: var(--mat-sys-surface-variant, #eceff1);
+      background: var(--spec-soft);
+      color: var(--spec);
+      font: 600 1rem/1 var(--font-display);
     }
     .cop {
-      margin: 0;
-      font-size: 0.85rem;
-      opacity: 0.75;
+      margin: 2px 0 0;
+      font: var(--text-code);
+      color: var(--ink-muted);
     }
     .error {
-      color: var(--mat-sys-error, #b3261e);
+      color: var(--danger-ink);
+    }
+    @media (max-width: 37.5rem) {
+      .principal {
+        width: 100%;
+        min-height: 3rem;
+      }
     }
   `,
 })
 export class EspecialidadDetalleComponent implements OnInit {
-  /** Llega de la ruta con `withComponentInputBinding`. */
   readonly id = input.required<string>();
 
   private readonly servicio = inject(PublicoService);
@@ -213,6 +246,12 @@ export class EspecialidadDetalleComponent implements OnInit {
   protected readonly detalle = signal<EspecialidadDetalle | null>(null);
   protected readonly cargando = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  protected readonly visual = computed(() => visualDeEspecialidad(this.detalle()?.nombre));
+
+  protected iniciales(odontologo: OdontologoPublico): string {
+    return (odontologo.nombres.charAt(0) + odontologo.apellidos.charAt(0)).toUpperCase();
+  }
 
   ngOnInit(): void {
     this.cargando.set(true);

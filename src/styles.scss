@@ -1,9 +1,5 @@
-// Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
 @use '@angular/material' as mat;
+@use './styles/dentalcite-tokens';
 
 html {
   height: 100%;
@@ -13,47 +9,110 @@ html {
         primary: mat.$azure-palette,
         tertiary: mat.$blue-palette,
       ),
-      typography: Roboto,
+      typography: (
+        plain-family: Roboto,
+        brand-family: Archivo,
+        bold-weight: 700,
+        medium-weight: 500,
+        regular-weight: 400,
+      ),
       density: 0,
+    )
+  );
+
+  // La paleta generada interpola; esto vuelve a fijar los valores del sistema
+  // de diseño, comprobados a 4.5:1.
+  @include mat.theme-overrides(
+    (
+      primary: var(--brand),
+      on-primary: var(--on-brand),
+      primary-container: var(--brand-soft),
+      on-primary-container: var(--on-brand-soft),
+      surface: var(--surface),
+      surface-container: var(--surface),
+      surface-container-low: var(--surface-page),
+      surface-container-high: var(--surface-overlay),
+      on-surface: var(--ink),
+      on-surface-variant: var(--ink-muted),
+      outline: var(--border-strong),
+      outline-variant: var(--border),
+      error: var(--danger),
+      on-error: var(--on-danger),
+    )
+  );
+
+  @include mat.button-overrides(
+    (
+      filled-container-shape: var(--radius-pill),
+      outlined-container-shape: var(--radius-pill),
+      text-container-shape: var(--radius-pill),
+      protected-container-shape: var(--radius-pill),
+      outlined-outline-color: var(--border-strong),
+      outlined-label-text-color: var(--brand-ink),
+      text-label-text-color: var(--brand-ink),
+    )
+  );
+  @include mat.card-overrides(
+    (
+      elevated-container-shape: var(--radius-md),
+      outlined-container-shape: var(--radius-md),
+      outlined-outline-color: var(--border),
+      subtitle-text-color: var(--ink-muted),
+    )
+  );
+  @include mat.form-field-overrides(
+    (
+      outlined-outline-color: var(--border-strong),
+      outlined-hover-outline-color: var(--ink-muted),
+      outlined-focus-outline-color: var(--brand),
+      outlined-focus-label-text-color: var(--brand-ink),
+      outlined-label-text-color: var(--ink-muted),
+      outlined-input-text-color: var(--ink),
+      outlined-container-shape: var(--radius-sm),
+    )
+  );
+  @include mat.dialog-overrides(
+    (
+      container-color: var(--surface-overlay),
+      container-shape: var(--radius-xl),
+      supporting-text-color: var(--ink-muted),
+    )
+  );
+  @include mat.progress-bar-overrides(
+    (
+      active-indicator-color: var(--brand),
+      track-color: var(--brand-soft),
+    )
+  );
+  @include mat.toolbar-overrides(
+    (
+      standard-height: var(--layout-navbar),
+      container-background-color: var(--surface),
+      container-text-color: var(--ink),
     )
   );
 }
 
 body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
   color-scheme: light;
 
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
-  background-color: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  font: var(--mat-sys-body-medium);
+  background-color: var(--surface-page);
+  color: var(--ink);
+  font: var(--text-body);
+  -webkit-font-smoothing: antialiased;
 
-  // Reset the user agent margin.
   margin: 0;
   height: 100%;
 }
-/* You can add global styles to this file, and also import other style files */
-
-// --- Base responsiva -------------------------------------------------------
-// El cliente tiene que servir desde un movil de 320px hasta un escritorio
-// ancho (RNF de usabilidad), asi que estas reglas valen para toda la app.
 
 *,
 *::before,
 *::after {
-  // Sin esto, un `width: 100%` mas padding desborda su contenedor, que es como
-  // aparecian las barras de desplazamiento horizontal en las tarjetas.
   box-sizing: border-box;
 }
 
 html,
 body {
-  // Ultima red: ningun ancho fijo debe poder desplazar la pagina entera de
-  // lado. Las tablas anchas se desplazan dentro de su propio `.tabla-scroll`.
   max-width: 100%;
   overflow-x: hidden;
 }
@@ -65,16 +124,82 @@ video {
   height: auto;
 }
 
-// --- Cromo de pantalla -----------------------------------------------------
-// Cada pantalla con cabecera y tabla repetia estas mismas reglas en su propio
-// bloque `styles`, con divergencias de orden y algun olvido. Declaradas una vez,
-// las cuatro areas —portal del paciente, recepcion, consulta del odontologo y
-// administracion— se ven iguales por construccion y no por disciplina.
-//
-// Un componente que necesite otra cosa la declara y gana sin mas: los estilos
-// de componente llevan el atributo de encapsulacion, asi que pesan mas que
-// estos. Es lo que conserva la cabecera del area publica y la de horarios,
-// que alinea abajo a proposito.
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+}
+
+// Foco de teclado visible en todo el producto: el anillo se separa del
+// elemento 2 px con la superficie de debajo, así nunca cae sobre un relleno
+// de marca donde no llegaría a 3:1.
+:where(a, button, [tabindex], input, select, textarea):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--focus-ring);
+}
+
+// Contenedor de página: centrado en `layout-max`, con el margen lateral del
+// sistema. Sin él, el contenido se ancla a la izquierda en un monitor ancho.
+.dc-container {
+  width: 100%;
+  max-width: var(--layout-max);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+}
+
+.dc-grid {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: repeat(auto-fill, minmax(var(--layout-card-min), 1fr));
+}
+
+// Color de especialidad: un acento, nunca un fondo. Vive en el recuadro del
+// icono y en el rótulo; la tarjeta que lo lleva fija solo `data-spec`.
+[data-spec] {
+  --spec: var(--ink-muted);
+  --spec-soft: var(--surface-sunken);
+}
+[data-spec='general'] {
+  --spec: var(--spec-general);
+  --spec-soft: var(--spec-general-soft);
+}
+[data-spec='estetica'] {
+  --spec: var(--spec-estetica);
+  --spec-soft: var(--spec-estetica-soft);
+}
+[data-spec='ortodoncia'] {
+  --spec: var(--spec-ortodoncia);
+  --spec-soft: var(--spec-ortodoncia-soft);
+}
+[data-spec='rehabilitacion'] {
+  --spec: var(--spec-rehabilitacion);
+  --spec-soft: var(--spec-rehabilitacion-soft);
+}
+[data-spec='periodoncia'] {
+  --spec: var(--spec-periodoncia);
+  --spec-soft: var(--spec-periodoncia-soft);
+}
+[data-spec='endodoncia'] {
+  --spec: var(--spec-endodoncia);
+  --spec-soft: var(--spec-endodoncia-soft);
+}
+[data-spec='cirugia'] {
+  --spec: var(--spec-cirugia);
+  --spec-soft: var(--spec-cirugia-soft);
+}
+
+.dc-spec-tile {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--spec-soft);
+  color: var(--spec);
+}
 
 .cabecera {
   display: flex;
@@ -86,65 +211,408 @@ video {
 }
 
 .cabecera h1 {
-  font-size: 1.5rem;
+  font: var(--text-display-md);
+  letter-spacing: -0.015em;
   margin: 0;
 }
 
-// --- Dias sin atencion -----------------------------------------------------
-// El calendario de reservar los deshabilita y Material ya los apaga solo. Los de
-// rango -la agenda, los bloqueos- los dejan elegibles a proposito, asi que hace
-// falta distinguirlos a la vista: el domingo se puede marcar como extremo de un
-// rango, pero conviene que se note que ese dia no se atiende.
-//
-// La regla es global y no del componente porque el calendario se dibuja en una
-// capa aparte, fuera del arbol del componente, donde su encapsulacion no llega.
+@media (max-width: 40rem) {
+  .cabecera h1 {
+    font-size: 1.625rem;
+    line-height: 1.2;
+  }
+}
+
 .mat-calendar-body-cell.dia-cerrado .mat-calendar-body-cell-content {
   opacity: 0.45;
   text-decoration: line-through;
 }
 
-// Las tablas de Material llevan un ancho minimo para que sus columnas quepan;
-// el contenedor que las envuelve es el que desplaza, y en tactil conviene que
-// lo haga con inercia y sin quedarse a medias entre dos columnas.
 .tabla-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
 
-// El contenedor recibe el foco para poder desplazarse con teclado (WCAG
-// 2.1.1), asi que ese foco tiene que verse (WCAG 2.4.7). `:focus-visible` y no
-// `:focus`: al pinchar con el raton el contorno seria ruido.
 .tabla-scroll:focus-visible {
-  outline: 2px solid var(--mat-sys-primary, #005cbb);
-  outline-offset: 2px;
+  outline: none;
 }
 
-// El paginador coloca en una sola linea el selector de tamano, el rango y las
-// flechas; en un movil esa linea no cabe y desbordaba su tarjeta.
+.tabla-scroll .mat-mdc-header-cell {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font: var(--text-label);
+}
+
+// Insignia de estado: siempre icono y palabra; el color solo no informa.
+.dc-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.75rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font: var(--text-label);
+  white-space: nowrap;
+
+  .mat-icon {
+    width: 1rem;
+    height: 1rem;
+    font-size: 1rem;
+  }
+}
+.dc-estado--info {
+  color: var(--accent-ink);
+}
+.dc-estado--ok {
+  color: var(--success-ink);
+}
+.dc-estado--aviso {
+  color: var(--warning-ink);
+}
+.dc-estado--error {
+  color: var(--danger-ink);
+}
+
+// Tabla que se apila en pantallas estrechas: cada fila pasa a ser una tarjeta
+// y cada celda lleva su rótulo (`data-etiqueta`) delante.
+@media (max-width: 48rem) {
+  .tabla-apilable {
+    background: none;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+
+    table {
+      min-width: 0 !important;
+      background: none;
+    }
+
+    thead,
+    .mat-mdc-header-row {
+      display: none;
+    }
+
+    tbody,
+    .mat-mdc-row {
+      display: block;
+    }
+
+    .mat-mdc-row {
+      height: auto;
+      margin-bottom: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+
+    .mat-mdc-cell {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-4);
+      min-height: 2.25rem;
+      padding: var(--space-1) 0;
+      border-bottom: none;
+      text-align: right;
+    }
+
+    .mat-mdc-cell::before {
+      content: attr(data-etiqueta);
+      flex: none;
+      font: var(--text-label);
+      color: var(--ink-muted);
+      text-align: left;
+    }
+
+    .col-acciones {
+      width: auto;
+      justify-content: flex-end;
+    }
+    .col-acciones::before {
+      content: none;
+    }
+  }
+}
+
 .mat-mdc-paginator-container {
   flex-wrap: wrap;
   justify-content: center;
   row-gap: 0.25rem;
 }
 
-// La lupa de los campos de filtro es decorativa: no es un boton, y la etiqueta
-// («Filtrar por motivo, odontologo o consultorio») ya dice lo que hacen. En
-// pantallas muy estrechas se le queda encima al texto de la etiqueta, que
-// Material no acorta al ancho del sufijo, asi que se retira y la etiqueta
-// recupera su sitio. Solo afecta a `.filtro`: el sufijo del campo de
-// Contraseña si es accionable y se conserva.
 @media (max-width: 26rem) {
   .filtro .mat-mdc-form-field-icon-suffix {
     display: none;
   }
 }
 
-// `subscriptSizing: dynamic` quita el hueco fijo que el campo reservaba debajo,
-// asi que una pista de dos lineas quedaba a 4px de la etiqueta del campo
-// siguiente. Se devuelve un margen propio, y solo cuando el subindice tiene
-// contenido: sin pista ni error el envoltorio queda vacio y no debe separar
-// nada.
 .mat-mdc-form-field-subscript-dynamic-size:has(.mat-mdc-form-field-hint-wrapper, .mat-mdc-form-field-error-wrapper) {
   padding-bottom: 0.5rem;
+}
+
+// En pantallas estrechas el diálogo sube desde abajo como una hoja: el pulgar
+// llega a los botones y el contenido largo se desplaza dentro.
+@media (max-width: 40rem) {
+  .cdk-overlay-pane.mat-mdc-dialog-panel {
+    align-self: flex-end;
+    width: 100%;
+    max-width: 100vw !important;
+
+    .mat-mdc-dialog-surface {
+      border-end-start-radius: 0;
+      border-end-end-radius: 0;
+    }
+  }
+}
+
+// Piezas compartidas de formularios y diálogos.
+// Resumen de la cita o del plan al abrir un diálogo.
+.dc-resumen {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font: var(--text-body);
+
+  strong {
+    font-weight: 500;
+  }
+}
+
+// Aviso con icono. Informativo por defecto; --advertencia cuando la acción
+// no se puede deshacer.
+.dc-aviso {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin: var(--space-3) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font: var(--text-body-sm);
+
+  .mat-icon {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    font-size: 1.25rem;
+    color: var(--accent-ink);
+  }
+}
+.dc-aviso--advertencia {
+  background: var(--surface);
+  border: 1px solid var(--warning);
+
+  .mat-icon {
+    color: var(--warning-ink);
+  }
+}
+
+// Aviso de un fallo del formulario entero (credenciales, servidor).
+.dc-aviso--error {
+  background: var(--surface);
+  border: 1px solid var(--danger);
+
+  .mat-icon {
+    color: var(--danger-ink);
+  }
+}
+
+// Piezas compartidas de las listas de administración.
+// Título con su subtítulo explicativo; el botón principal queda a la derecha.
+.cabecera .dc-titular {
+  flex: 1 1 18rem;
+  min-width: 0;
+
+  h1 {
+    margin: 0;
+  }
+}
+.dc-subtitulo {
+  margin: var(--space-1) 0 0;
+  max-width: var(--layout-prose);
+  color: var(--ink-muted);
+}
+
+// Panel de filtros: un campo de búsqueda ancho y selectores a su lado.
+.dc-filtros {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+  margin-bottom: var(--space-5);
+  padding: var(--space-5) var(--space-5) var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+
+  .mat-mdc-form-field {
+    width: 100%;
+  }
+}
+@media (max-width: 48rem) {
+  .dc-filtros {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-4) var(--space-4) var(--space-1);
+  }
+}
+
+// Acciones de fila con texto: «Editar» y «Dar de baja» se leen sin adivinar el icono.
+.dc-acciones {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+@media (max-width: 48rem) {
+  .dc-acciones {
+    flex-wrap: wrap;
+  }
+}
+.dc-accion {
+  --mat-button-outlined-container-height: 2.25rem;
+  --mat-button-outlined-horizontal-padding: var(--space-3);
+  font-size: 0.8125rem;
+
+  .mat-icon {
+    width: 1rem;
+    height: 1rem;
+    font-size: 1rem;
+  }
+}
+.dc-accion--peligro {
+  --mat-button-outlined-label-text-color: var(--danger-ink);
+}
+
+// Persona con avatar de iniciales y una segunda línea.
+.dc-persona {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: left;
+
+  .dc-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-pill);
+    background: var(--spec-soft, var(--surface-sunken));
+    color: var(--spec, var(--ink-muted));
+    font: 600 0.875rem/1 var(--font-display);
+  }
+  b {
+    display: block;
+    font-weight: 500;
+  }
+  small {
+    display: block;
+    font: var(--text-body-sm);
+    color: var(--ink-muted);
+  }
+}
+
+// Etiqueta con el color de su especialidad (el color solo vive en el texto y su fondo suave).
+.dc-etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+.dc-etiqueta {
+  display: inline-flex;
+  align-items: center;
+  height: 1.625rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--spec-soft, var(--surface-sunken));
+  color: var(--spec, var(--ink-muted));
+  font: var(--text-label);
+}
+
+// Estado vacío: qué no hay y cómo seguir.
+.dc-vacio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-6) 0;
+  color: var(--ink-muted);
+
+  .mat-icon {
+    flex: none;
+    color: var(--ink-faint);
+  }
+}
+
+// «Seguimiento de tratamientos» no cabe en una línea del menú: que baje en vez de cortarse con «…».
+.lateral {
+  .mdc-list-item__primary-text {
+    white-space: normal;
+    text-overflow: clip;
+    line-height: 1.25;
+  }
+
+  .mat-mdc-list-item {
+    --mat-list-list-item-one-line-container-height: auto;
+    min-height: 3rem;
+  }
+}
+
+// Sección de un formulario largo: título y filete entre secciones.
+.dc-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+
+  & + & {
+    margin-top: var(--space-4);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border);
+  }
+
+  > h2 {
+    font: var(--text-title-sm);
+    margin: 0 0 var(--space-3);
+  }
+}
+
+// Texto de ayuda o de duración fuera de un campo de Material.
+.dc-ayuda {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+  font: var(--text-label);
+  color: var(--ink-muted);
+
+  .mat-icon {
+    width: 1rem;
+    height: 1rem;
+    font-size: 1rem;
+  }
+}
+
+// Pie de acciones de un diálogo en pantalla estrecha: el botón principal arriba.
+@media (max-width: 40rem) {
+  .mat-mdc-dialog-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: var(--space-2);
+
+    .mat-mdc-button-base {
+      width: 100%;
+      min-height: 3rem;
+      margin: 0;
+    }
+  }
 }

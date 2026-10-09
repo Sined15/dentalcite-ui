@@ -75,8 +75,6 @@ describe('ResultadoDialogo', () => {
   });
 
   it('no trae ningun resultado preseleccionado', () => {
-    // Marcar «Atendida» de antemano convertiria el descuido en el resultado por
-    // defecto, y RN-09 no admite corregirlo despues.
     montar();
 
     expect(componente.resultado).toBe('');
@@ -103,7 +101,6 @@ describe('ResultadoDialogo', () => {
   });
 
   it('al registrar cierra el dialogo con la cita que devuelve el servidor', () => {
-    // Quien lo abrio necesita saber si la cita ha ocupado una sesion para decirlo.
     montar();
     componente.resultado = 'ATENDIDA';
 
@@ -114,8 +111,6 @@ describe('ResultadoDialogo', () => {
   });
 
   it('ante un 409 muestra el motivo y no cierra el dialogo', () => {
-    // La cita ya tiene resultado, o todavia no ha terminado: quien opera
-    // necesita leer por que no se pudo.
     montar();
     componente.resultado = 'ATENDIDA';
 

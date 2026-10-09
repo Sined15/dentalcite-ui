@@ -7,10 +7,6 @@ const PROFILAXIS = { id: 'tra-2', nombre: 'Profilaxis dental' };
 const ANA = { id: 'odo-2', nombre: 'Ana Quispe' };
 const LUIS = { id: 'odo-1', nombre: 'Luis Pérez' };
 
-/**
- * «Lo que me han hecho», deducido de las citas atendidas porque la API no tiene
- * otra cosa que ofrecerle al paciente.
- */
 describe('agruparTratamientosRecibidos', () => {
   it('agrupa por tratamiento y cuenta las sesiones atendidas', () => {
     const recibidos = agruparTratamientosRecibidos([
@@ -25,8 +21,6 @@ describe('agruparTratamientosRecibidos', () => {
   });
 
   it('ignora las citas que no estan ATENDIDA', () => {
-    // Una cita futura, una cancelada y una a la que no se asistió no son
-    // tratamiento recibido: nadie tocó al paciente.
     const recibidos = agruparTratamientosRecibidos([
       cita({ id: 'cit-1', dias: 5, estado: 'CONFIRMADA', tratamiento: ENDODONCIA }),
       cita({ id: 'cit-2', dias: -3, estado: 'CANCELADA', tratamiento: ENDODONCIA }),
@@ -55,8 +49,6 @@ describe('agruparTratamientosRecibidos', () => {
       recientes,
     ]);
 
-    // Aunque la antigua llegue primero: la fecha no depende del orden de la
-    // respuesta.
     expect(recibidos[0].ultimaFecha).toBe(recientes.fecha);
     expect(recibidos[0].ultimoOdontologo).toBe('Ana Quispe');
   });
